@@ -38,6 +38,16 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+const { syncFromSupabase } = require('./db/database');
+
+// Automatic live sync middleware from Supabase
+app.use(async (req, res, next) => {
+  if (req.path.startsWith('/api') && req.path !== '/api/health') {
+    await syncFromSupabase(false).catch(() => {});
+  }
+  next();
+});
+
 // Register API Routes
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/dashboard', require('./routes/dashboard'));

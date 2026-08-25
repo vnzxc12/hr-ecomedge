@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
-const { db } = require('../db/database');
+const { db, pushToSupabase } = require('../db/database');
 const { authenticate, requireManager, requireSelfOrManager } = require('../middleware/auth');
 
 // GET /api/employees (List with search and filters)
@@ -225,6 +225,36 @@ router.post('/', authenticate, requireManager, (req, res) => {
       WHERE e.id = ?
     `).get(createdEmpId);
 
+    // Push to Supabase async
+    pushToSupabase('employees', 'insert', {
+      id: createdEmpId,
+      employee_code: employeeCode,
+      first_name: first_name.trim(),
+      last_name: last_name.trim(),
+      job_title: job_title.trim(),
+      department: department.trim(),
+      employment_status: employment_status || 'active',
+      employment_type: employment_type || 'full_time',
+      hire_date,
+      hourly_rate: parseFloat(hourly_rate) || 0,
+      monthly_salary: parseFloat(monthly_salary) || 0,
+      phone: phone || null,
+      address: address || null,
+      emergency_contact_name: emergency_contact_name || null,
+      emergency_contact_phone: emergency_contact_phone || null,
+      bank_name: bank_name || null,
+      bank_account_number: bank_account_number || null,
+      avatar_url: avatar_url || null
+    }).catch(() => {});
+
+    pushToSupabase('users', 'insert', {
+      username: finalUsername,
+      password_hash: passwordHash,
+      role: userRole,
+      employee_id: createdEmpId,
+      avatar_url: avatar_url || null
+    }).catch(() => {});
+
     res.status(201).json({
       message: `Employee ${first_name} ${last_name} created successfully!`,
       employee: created,
@@ -337,6 +367,10 @@ router.put('/:id', authenticate, (req, res) => {
     }
 
     const updated = db.prepare('SELECT * FROM employees WHERE id = ?').get(empId);
+
+    // Push update to Supabase
+    pushToSupabase('employees', 'update', updated, empId).catch(() => {});
+
     res.json({ message: 'Profile updated successfully.', employee: updated });
   } catch (err) {
     console.error('Update employee error:', err);
@@ -349,6 +383,10 @@ router.delete('/:id', authenticate, requireManager, (req, res) => {
   try {
     const empId = parseInt(req.params.id, 10);
     db.prepare("UPDATE employees SET employment_status = 'terminated', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(empId);
+
+    // Push update to Supabase
+    pushToSupabase('employees', 'update', { employment_status: 'terminated' }, empId).catch(() => {});
+
     res.json({ message: 'Employee status updated to Terminated/Deactivated.' });
   } catch (err) {
     console.error('Delete employee error:', err);

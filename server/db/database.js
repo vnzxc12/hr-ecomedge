@@ -126,9 +126,9 @@ function initSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_id INTEGER NOT NULL,
       year INTEGER NOT NULL,
-      vacation_days INTEGER DEFAULT 15,
-      sick_days INTEGER DEFAULT 10,
-      emergency_days INTEGER DEFAULT 5,
+      vacation_days INTEGER DEFAULT 0,
+      sick_days INTEGER DEFAULT 0,
+      emergency_days INTEGER DEFAULT 0,
       vacation_used INTEGER DEFAULT 0,
       sick_used INTEGER DEFAULT 0,
       emergency_used INTEGER DEFAULT 0,
@@ -238,22 +238,16 @@ function initSchema() {
 
   try {
     sqlite.exec('ALTER TABLE employees ADD COLUMN avatar_url TEXT');
-  } catch (e) {
-    // Column already exists
-  }
+  } catch (e) {}
   try {
     sqlite.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
-  } catch (e) {
-    // Column already exists
-  }
+  } catch (e) {}
 }
 
-// Seed clean initial accounts: admin and manager
+// Seed clean initial accounts if database is empty
 function seedIfEmpty() {
   const userCount = sqlite.prepare('SELECT COUNT(*) as count FROM users').get().count;
   if (userCount > 0) return;
-
-  console.log('🌱 Seeding clean initial accounts into database...');
 
   const passwordHashAdmin = bcrypt.hashSync('admin123', 10);
   const passwordHashMgr = bcrypt.hashSync('password01', 10);
@@ -276,28 +270,151 @@ function seedIfEmpty() {
   const currentYear = new Date().getFullYear();
 
   sqlite.transaction(() => {
-    // 1. Initial Admin & Manager Profiles
     insertEmp.run(1, 'EMP-001', 'Admin', 'User', 'System Owner / Executive Director', 'Management', 'active', 'full_time', '2026-01-01', 0.00, 75000.00, '+63 900 000 0001', 'Manila, Philippines', 'Emergency Contact', '+63 900 000 0000', 'BDO', '**** 0001');
     insertEmp.run(2, 'EMP-002', 'Operations', 'Manager', 'Operations HR Manager', 'Operations', 'active', 'full_time', '2026-01-01', 0.00, 50000.00, '+63 900 000 0002', 'Manila, Philippines', 'Emergency Contact', '+63 900 000 0000', 'BPI', '**** 0002');
 
-    // 2. Initial Auth Users: admin (admin123) and manager (password01)
     insertUser.run(1, 'admin', passwordHashAdmin, 'manager', 1);
     insertUser.run(2, 'manager', passwordHashMgr, 'manager', 2);
 
-    // 3. Leave Balances (Starts at 0)
     insertBalance.run(1, currentYear, 0, 0, 0, 0, 0, 0);
     insertBalance.run(2, currentYear, 0, 0, 0, 0, 0, 0);
   })();
+}
 
-  console.log('✅ Initial accounts (admin / admin123 and manager / password01) initialized!');
+// Real-time synchronization from Supabase
+let lastSyncTime = 0;
+async function syncFromSupabase(force = false) {
+  if (!supabase) return;
+  const now = Date.now();
+  if (!force && now - lastSyncTime < 2000) {
+    return; // throttle to once every 2s
+  }
+  lastSyncTime = now;
+
+  try {
+    const [
+      { data: employees, error: empErr },
+      { data: users, error: userErr },
+      { data: leaves },
+      { data: balances },
+      { data: timeLogs }
+    ] = await Promise.all([
+      supabase.from('employees').select('*'),
+      supabase.from('users').select('*'),
+      supabase.from('leaves').select('*'),
+      supabase.from('leave_balances').select('*'),
+      supabase.from('time_logs').select('*')
+    ]);
+
+    if (empErr || userErr) {
+      return;
+    }
+
+    sqlite.transaction(() => {
+      if (Array.isArray(employees)) {
+        sqlite.exec('DELETE FROM employees');
+        const insertEmp = sqlite.prepare(`
+          INSERT INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number, avatar_url)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const e of employees) {
+          insertEmp.run(
+            e.id,
+            e.employee_code || `EMP-${String(e.id).padStart(3, '0')}`,
+            e.first_name,
+            e.last_name,
+            e.job_title,
+            e.department,
+            e.employment_status || 'active',
+            e.employment_type || 'full_time',
+            e.hire_date || '2026-01-01',
+            parseFloat(e.hourly_rate) || 0,
+            parseFloat(e.monthly_salary) || 0,
+            e.phone || null,
+            e.address || null,
+            e.emergency_contact_name || null,
+            e.emergency_contact_phone || null,
+            e.bank_name || null,
+            e.bank_account_number || null,
+            e.avatar_url || null
+          );
+        }
+      }
+
+      if (Array.isArray(users)) {
+        sqlite.exec('DELETE FROM users');
+        const insertUser = sqlite.prepare(`
+          INSERT INTO users (id, username, password_hash, role, employee_id, avatar_url)
+          VALUES (?, ?, ?, ?, ?, ?)
+        `);
+        for (const u of users) {
+          insertUser.run(u.id, u.username, u.password_hash, u.role || 'employee', u.employee_id || null, u.avatar_url || null);
+        }
+      }
+
+      if (Array.isArray(balances)) {
+        sqlite.exec('DELETE FROM leave_balances');
+        const insertBal = sqlite.prepare(`
+          INSERT INTO leave_balances (id, employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const b of balances) {
+          insertBal.run(b.id, b.employee_id, b.year, b.vacation_days || 0, b.sick_days || 0, b.emergency_days || 0, b.vacation_used || 0, b.sick_used || 0, b.emergency_used || 0);
+        }
+      }
+
+      if (Array.isArray(leaves)) {
+        sqlite.exec('DELETE FROM leaves');
+        const insertLeave = sqlite.prepare(`
+          INSERT INTO leaves (id, employee_id, leave_type, start_date, end_date, days_count, reason, status, reviewed_by, review_notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const l of leaves) {
+          insertLeave.run(l.id, l.employee_id, l.leave_type, l.start_date, l.end_date, l.days_count, l.reason, l.status, l.reviewed_by || null, l.review_notes || null);
+        }
+      }
+
+      if (Array.isArray(timeLogs)) {
+        sqlite.exec('DELETE FROM time_logs');
+        const insertLog = sqlite.prepare(`
+          INSERT INTO time_logs (id, employee_id, date, clock_in, break_start, break_end, clock_out, total_hours, break_duration_mins, overtime_hours, status, notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const t of timeLogs) {
+          insertLog.run(t.id, t.employee_id, t.date, t.clock_in, t.break_start || null, t.break_end || null, t.clock_out || null, t.total_hours || 0, t.break_duration_mins || 0, t.overtime_hours || 0, t.status || 'clocked_in', t.notes || null);
+        }
+      }
+    })();
+  } catch (err) {
+    console.warn('Sync from Supabase warning:', err.message);
+  }
+}
+
+// Push mutations to Supabase
+async function pushToSupabase(table, action, data, id) {
+  if (!supabase) return;
+  try {
+    if (action === 'insert') {
+      await supabase.from(table).insert(data);
+    } else if (action === 'update') {
+      await supabase.from(table).update(data).eq('id', id);
+    } else if (action === 'delete') {
+      await supabase.from(table).delete().eq('id', id);
+    }
+  } catch (err) {
+    console.warn(`Push to Supabase (${table}) warning:`, err.message);
+  }
 }
 
 // Initialize on load
 initSchema();
 seedIfEmpty();
+syncFromSupabase(true);
 
 module.exports = {
   db: sqlite,
   supabase,
+  syncFromSupabase,
+  pushToSupabase,
   isSupabaseConfigured: () => Boolean(supabase)
 };
