@@ -103,18 +103,62 @@ export default function Dashboard({ onNavigate }) {
 
     return (
       <div className="page-container">
-        {/* Welcome Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>
-              Welcome back, {user?.first_name || user?.username}! 👋
-            </h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-              Real-time executive overview of workforce attendance, payroll operations, and pending approvals.
-            </p>
+        {/* Executive Overview Profile Hero Banner */}
+        <div className="glass-card" style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '1.5rem',
+          marginBottom: '2rem',
+          padding: '1.5rem 1.75rem',
+          background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%)',
+          border: '1px solid var(--border-highlight)',
+          borderRadius: 'var(--radius-lg)',
+          boxShadow: 'var(--shadow-md)',
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+            {/* Big User Avatar Portrait */}
+            <div style={{ position: 'relative' }}>
+              <div className="user-avatar" style={{
+                width: '84px',
+                height: '84px',
+                fontSize: '2rem',
+                border: '3px solid var(--brand-green)',
+                boxShadow: '0 4px 16px var(--brand-green-glow)'
+              }}>
+                {user?.avatar_url ? (
+                  <img src={user.avatar_url} alt={user?.first_name || 'User'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
+                )}
+              </div>
+              <span className={`status-dot ${punchStatus}`} style={{
+                position: 'absolute',
+                bottom: '2px',
+                right: '2px',
+                width: '14px',
+                height: '14px',
+                border: '2px solid #ffffff'
+              }} />
+            </div>
+
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: '1.75rem', margin: 0, color: 'var(--text-primary)' }}>
+                  Welcome back, {user?.first_name || user?.username}! 👋
+                </h1>
+                <span className="badge badge-primary" style={{ fontSize: '0.78rem' }}>
+                  👑 Executive / Owner
+                </span>
+              </div>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', margin: 0 }}>
+                {user?.job_title || 'System Administrator'} • {user?.department || 'Operations'} ({user?.employee_code || 'EMP-001'})
+              </p>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => setShowPunchModal(true)}>
               <Clock size={16} />
               <span>Punch Clock</span>
@@ -365,14 +409,69 @@ export default function Dashboard({ onNavigate }) {
 
   return (
     <div className="page-container">
-      {/* Welcome Header */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>
-          Hello, {user?.first_name || user?.username}! 👋
-        </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          {user?.job_title || 'Employee'} • {user?.department || 'Operations'} ({user?.employee_code || 'EMP-000'})
-        </p>
+      {/* Employee Overview Profile Hero Banner */}
+      <div className="glass-card" style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '1.5rem',
+        marginBottom: '2rem',
+        padding: '1.5rem 1.75rem',
+        background: 'linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%)',
+        border: '1px solid var(--border-highlight)',
+        borderRadius: 'var(--radius-lg)',
+        boxShadow: 'var(--shadow-md)',
+        flexWrap: 'wrap'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+          {/* Big Circular User Avatar */}
+          <div style={{ position: 'relative' }}>
+            <div className="user-avatar" style={{
+              width: '84px',
+              height: '84px',
+              fontSize: '2rem',
+              border: '3px solid var(--brand-green)',
+              boxShadow: '0 4px 16px var(--brand-green-glow)'
+            }}>
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt={user?.first_name || 'User'} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
+              )}
+            </div>
+            <span className={`status-dot ${punchStatus}`} style={{
+              position: 'absolute',
+              bottom: '2px',
+              right: '2px',
+              width: '14px',
+              height: '14px',
+              border: '2px solid #ffffff'
+            }} />
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
+              <h1 style={{ fontSize: '1.75rem', margin: 0, color: 'var(--text-primary)' }}>
+                Hello, {user?.first_name || user?.username}! 👋
+              </h1>
+              <span className="badge badge-success" style={{ fontSize: '0.78rem' }}>
+                👤 Employee Portal
+              </span>
+            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', margin: 0 }}>
+              {user?.job_title || 'Staff'} • {user?.department || 'Operations'} ({user?.employee_code || 'EMP-000'})
+            </p>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={() => onNavigate('profile')}>
+            <span>My Profile & Settings</span>
+          </button>
+          <button className="btn btn-secondary" onClick={() => onNavigate('leaves')}>
+            <span>Apply Leave</span>
+          </button>
+        </div>
       </div>
 
       {/* Interactive Punch Clock Hero Banner */}

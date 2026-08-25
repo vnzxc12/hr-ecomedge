@@ -1160,9 +1160,9 @@ export default function Employees() {
         <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
           <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
                 <div style={{ position: 'relative' }}>
-                  <div className="user-avatar" style={{ width: '52px', height: '52px', fontSize: '1.25rem', overflow: 'hidden' }}>
+                  <div className="user-avatar" style={{ width: '70px', height: '70px', fontSize: '1.75rem', overflow: 'hidden', border: '2px solid var(--brand-green)', boxShadow: '0 4px 12px var(--brand-green-glow)' }}>
                     {selectedEmp.avatar_url ? (
                       <img src={selectedEmp.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     ) : (
@@ -1173,13 +1173,13 @@ export default function Employees() {
                     <button
                       type="button"
                       onClick={() => drawerPhotoInputRef.current?.click()}
-                      title="Upload Employee Photo"
+                      title="Upload / Change Employee Photo"
                       style={{
                         position: 'absolute',
                         bottom: '-4px',
                         right: '-4px',
-                        width: '24px',
-                        height: '24px',
+                        width: '26px',
+                        height: '26px',
                         borderRadius: 'var(--radius-full)',
                         background: 'var(--brand-green)',
                         color: '#ffffff',
@@ -1190,7 +1190,7 @@ export default function Employees() {
                         cursor: 'pointer'
                       }}
                     >
-                      <Camera size={12} />
+                      <Camera size={13} />
                     </button>
                   )}
                 </div>
