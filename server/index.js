@@ -53,10 +53,11 @@ app.use('/api/assets', require('./routes/assets'));
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 if (fs.existsSync(clientDist)) {
   app.use(express.static(clientDist));
-  app.get('(.*)', (req, res) => {
-    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
-      res.sendFile(path.join(clientDist, 'index.html'));
+  app.use((req, res, next) => {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads') && req.method === 'GET') {
+      return res.sendFile(path.join(clientDist, 'index.html'));
     }
+    next();
   });
 }
 
