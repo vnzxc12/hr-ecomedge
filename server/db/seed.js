@@ -47,9 +47,9 @@ db.transaction(() => {
   insertUser.run(1, 'admin', passwordHashAdmin, 'manager', 1);
   insertUser.run(2, 'manager', passwordHashMgr, 'manager', 2);
 
-  // 3. Leave Balances
-  insertBalance.run(1, currentYear, 15, 10, 5, 0, 0, 0);
-  insertBalance.run(2, currentYear, 15, 10, 5, 0, 0, 0);
+  // 3. Leave Balances (Starts at 0)
+  insertBalance.run(1, currentYear, 0, 0, 0, 0, 0, 0);
+  insertBalance.run(2, currentYear, 0, 0, 0, 0, 0, 0);
 })();
 
 console.log('✅ Clean database reset complete! Available accounts: "admin" / "admin123" and "manager" / "password01"');

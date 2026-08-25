@@ -55,11 +55,11 @@ ON CONFLICT (id) DO UPDATE SET
     password_hash = EXCLUDED.password_hash,
     role = EXCLUDED.role;
 
--- 5. Initial Leave Balances
+-- 5. Initial Leave Balances (Starts at 0, managers can assign quotas)
 INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
 VALUES
-(1, 2026, 15, 10, 5, 0, 0, 0),
-(2, 2026, 15, 10, 5, 0, 0, 0)
+(1, 2026, 0, 0, 0, 0, 0, 0),
+(2, 2026, 0, 0, 0, 0, 0, 0)
 ON CONFLICT (employee_id, year) DO NOTHING;
 
 -- 6. Safely reset sequences if they exist

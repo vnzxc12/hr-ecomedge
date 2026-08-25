@@ -7,6 +7,7 @@ import {
   Search,
   Filter,
   Eye,
+  Edit,
   Trash2,
   KeyRound,
   ShieldCheck,
@@ -23,7 +24,8 @@ import {
   Copy,
   Check,
   Camera,
-  Upload
+  Upload,
+  Sliders
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -37,9 +39,12 @@ export default function Employees() {
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [showLeaveQuotaModal, setShowLeaveQuotaModal] = useState(false);
+
   const [createdCredentials, setCreatedCredentials] = useState(null);
   const [copied, setCopied] = useState(false);
 
@@ -47,7 +52,7 @@ export default function Employees() {
   const [empDetails, setEmpDetails] = useState(null);
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
 
-  // Photo upload in drawer
+  // Photo upload
   const drawerPhotoInputRef = useRef(null);
   const addModalPhotoInputRef = useRef(null);
   const [uploadingDrawerPhoto, setUploadingDrawerPhoto] = useState(false);
@@ -76,6 +81,32 @@ export default function Employees() {
     role: 'employee'
   });
 
+  // Edit Employee Form
+  const [editFormData, setEditFormData] = useState({
+    first_name: '',
+    last_name: '',
+    job_title: '',
+    department: 'Operations',
+    employment_status: 'active',
+    employment_type: 'full_time',
+    hire_date: '',
+    hourly_rate: '',
+    monthly_salary: '',
+    phone: '',
+    address: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    bank_name: '',
+    bank_account_number: ''
+  });
+
+  // Leave Quota Form for Selected Employee
+  const [empQuotaForm, setEmpQuotaForm] = useState({
+    vacation_days: 0,
+    sick_days: 0,
+    emergency_days: 0
+  });
+
   // Reset password form
   const [newPassword, setNewPassword] = useState('');
 
@@ -101,9 +132,38 @@ export default function Employees() {
     try {
       const res = await api.employees.getById(emp.id);
       setEmpDetails(res);
+      if (res.leaveBalance) {
+        setEmpQuotaForm({
+          vacation_days: res.leaveBalance.vacation_days || 0,
+          sick_days: res.leaveBalance.sick_days || 0,
+          emergency_days: res.leaveBalance.emergency_days || 0
+        });
+      }
     } catch (err) {
       showToast(err.message, 'danger');
     }
+  };
+
+  const handleOpenEdit = (emp) => {
+    setSelectedEmp(emp);
+    setEditFormData({
+      first_name: emp.first_name || '',
+      last_name: emp.last_name || '',
+      job_title: emp.job_title || '',
+      department: emp.department || 'Operations',
+      employment_status: emp.employment_status || 'active',
+      employment_type: emp.employment_type || 'full_time',
+      hire_date: emp.hire_date || '',
+      hourly_rate: emp.hourly_rate || '',
+      monthly_salary: emp.monthly_salary || '',
+      phone: emp.phone || '',
+      address: emp.address || '',
+      emergency_contact_name: emp.emergency_contact_name || '',
+      emergency_contact_phone: emp.emergency_contact_phone || '',
+      bank_name: emp.bank_name || 'BDO',
+      bank_account_number: emp.bank_account_number || ''
+    });
+    setShowEditModal(true);
   };
 
   const handleAddModalPhotoSelect = (e) => {
@@ -124,7 +184,6 @@ export default function Employees() {
     try {
       const res = await api.employees.uploadAvatar(selectedEmp.id, fd);
       showToast(res.message, 'success');
-      // Update local state
       setSelectedEmp(prev => ({ ...prev, avatar_url: res.avatar_url }));
       if (empDetails?.employee) {
         setEmpDetails(prev => ({
@@ -144,8 +203,6 @@ export default function Employees() {
     e.preventDefault();
     try {
       const payload = { ...formData };
-      
-      // If user selected an avatar file, let's create the employee first, then upload avatar
       const res = await api.employees.create(payload);
       showToast(res.message, 'success');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -200,6 +257,42 @@ export default function Employees() {
     }
   };
 
+  const handleUpdateEmployee = async (e) => {
+    e.preventDefault();
+    if (!selectedEmp) return;
+    try {
+      const res = await api.employees.update(selectedEmp.id, editFormData);
+      showToast('Employee information updated successfully!', 'success');
+      setShowEditModal(false);
+      if (selectedEmp.id === empDetails?.employee?.id) {
+        const refreshed = await api.employees.getById(selectedEmp.id);
+        setEmpDetails(refreshed);
+        setSelectedEmp(refreshed.employee);
+      }
+      loadEmployees();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
+  const handleSaveEmpQuota = async (e) => {
+    e.preventDefault();
+    if (!selectedEmp) return;
+    try {
+      await api.leaves.updateBalance(selectedEmp.id, {
+        vacation_days: parseInt(empQuotaForm.vacation_days, 10) || 0,
+        sick_days: parseInt(empQuotaForm.sick_days, 10) || 0,
+        emergency_days: parseInt(empQuotaForm.emergency_days, 10) || 0
+      });
+      showToast('Leave quotas updated successfully!', 'success');
+      setShowLeaveQuotaModal(false);
+      const res = await api.employees.getById(selectedEmp.id);
+      setEmpDetails(res);
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
   const handleResetPassword = async (e) => {
     e.preventDefault();
     if (!selectedEmp?.user_id) {
@@ -242,7 +335,7 @@ export default function Employees() {
         <div>
           <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>Employee Directory & Profiles</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            Comprehensive workforce records, profile photos, credentials management, and departmental allocations.
+            Comprehensive workforce records, profile photos, edit information, credentials management, and departmental allocations.
           </p>
         </div>
 
@@ -381,6 +474,15 @@ export default function Employees() {
                         <>
                           <button
                             className="btn-icon"
+                            title="Edit Employee Info"
+                            onClick={() => handleOpenEdit(emp)}
+                            style={{ color: 'var(--brand-green)' }}
+                          >
+                            <Edit size={16} />
+                          </button>
+
+                          <button
+                            className="btn-icon"
                             title="Reset Password"
                             onClick={() => {
                               setSelectedEmp(emp);
@@ -412,7 +514,7 @@ export default function Employees() {
       </div>
 
       {/* ==========================================
-          ADD EMPLOYEE MODAL (With Photo & Auto-Credentials)
+          ADD EMPLOYEE MODAL
           ========================================== */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
@@ -708,6 +810,197 @@ export default function Employees() {
       )}
 
       {/* ==========================================
+          EDIT EMPLOYEE MODAL (Manager / Admin)
+          ========================================== */}
+      {showEditModal && selectedEmp && (
+        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Edit size={22} color="var(--primary)" />
+                <h3>Edit Employee: {selectedEmp.first_name} {selectedEmp.last_name}</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setShowEditModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleUpdateEmployee}>
+              <div className="modal-body">
+                {/* 1. Basic Details */}
+                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem' }}>1. Basic & Contact Information</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">First Name *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.first_name}
+                      onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Last Name *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.last_name}
+                      onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Phone Number</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Residential Address</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.address}
+                      onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Emergency Contact Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.emergency_contact_name}
+                      onChange={(e) => setEditFormData({ ...editFormData, emergency_contact_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Emergency Contact Phone</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.emergency_contact_phone}
+                      onChange={(e) => setEditFormData({ ...editFormData, emergency_contact_phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* 2. Position & Status */}
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>2. Role, Department & Status</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Job Title *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.job_title}
+                      onChange={(e) => setEditFormData({ ...editFormData, job_title: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Department *</label>
+                    <select
+                      className="form-control"
+                      value={editFormData.department}
+                      onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
+                    >
+                      <option value="Operations">Operations</option>
+                      <option value="Engineering">Engineering</option>
+                      <option value="Design & Product">Design & Product</option>
+                      <option value="Marketing">Marketing</option>
+                      <option value="Human Resources">Human Resources</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Employment Status</label>
+                    <select
+                      className="form-control"
+                      value={editFormData.employment_status}
+                      onChange={(e) => setEditFormData({ ...editFormData, employment_status: e.target.value })}
+                    >
+                      <option value="active">Active</option>
+                      <option value="probationary">Probationary</option>
+                      <option value="resigned">Resigned</option>
+                      <option value="terminated">Terminated</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Hire Date</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={editFormData.hire_date}
+                      onChange={(e) => setEditFormData({ ...editFormData, hire_date: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Monthly Salary (₱)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editFormData.monthly_salary}
+                      onChange={(e) => setEditFormData({ ...editFormData, monthly_salary: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Hourly Rate (₱)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editFormData.hourly_rate}
+                      onChange={(e) => setEditFormData({ ...editFormData, hourly_rate: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                {/* 3. Banking Information */}
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>3. Banking & Direct Deposit</h4>
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Bank Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.bank_name}
+                      onChange={(e) => setEditFormData({ ...editFormData, bank_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Account Number</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editFormData.bank_account_number}
+                      onChange={(e) => setEditFormData({ ...editFormData, bank_account_number: e.target.value })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
           CREDENTIALS CONFIRMATION MODAL
           ========================================== */}
       {showCredentialsModal && createdCredentials && (
@@ -814,7 +1107,18 @@ export default function Employees() {
                 />
 
                 <div>
-                  <h3>{selectedEmp.first_name} {selectedEmp.last_name}</h3>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <h3>{selectedEmp.first_name} {selectedEmp.last_name}</h3>
+                    {isManager && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => handleOpenEdit(selectedEmp)}
+                        style={{ padding: '2px 8px', fontSize: '0.75rem' }}
+                      >
+                        <Edit size={12} /> Edit Info
+                      </button>
+                    )}
+                  </div>
                   <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     {selectedEmp.employee_code} • {selectedEmp.job_title} ({selectedEmp.department})
                   </p>
@@ -874,9 +1178,9 @@ export default function Employees() {
                       <div className="stat-info">
                         <div className="label">Vacation Balance</div>
                         <div className="value" style={{ color: 'var(--success)' }}>
-                          {empDetails?.leaveBalance ? (empDetails.leaveBalance.vacation_days - empDetails.leaveBalance.vacation_used) : 15} Days
+                          {empDetails?.leaveBalance ? (empDetails.leaveBalance.vacation_days - empDetails.leaveBalance.vacation_used) : 0} Days
                         </div>
-                        <div className="subtext">Sick Days Left: {empDetails?.leaveBalance ? (empDetails.leaveBalance.sick_days - empDetails.leaveBalance.sick_used) : 10}</div>
+                        <div className="subtext">Sick Days Left: {empDetails?.leaveBalance ? (empDetails.leaveBalance.sick_days - empDetails.leaveBalance.sick_used) : 0}</div>
                       </div>
                     </div>
                     <div className="stat-card cyan">
@@ -908,6 +1212,53 @@ export default function Employees() {
                       </div>
                     </div>
                   </div>
+                </div>
+              )}
+
+              {activeDetailTab === 'leaves' && (
+                <div>
+                  {isManager && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem' }}>
+                      <div>
+                        <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>Annual Leave Quotas & Balances</div>
+                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                          Vacation: {empDetails?.leaveBalance?.vacation_days || 0}d (Used: {empDetails?.leaveBalance?.vacation_used || 0}d) • Sick: {empDetails?.leaveBalance?.sick_days || 0}d (Used: {empDetails?.leaveBalance?.sick_used || 0}d) • Emergency: {empDetails?.leaveBalance?.emergency_days || 0}d
+                        </div>
+                      </div>
+                      <button className="btn btn-secondary btn-sm" onClick={() => setShowLeaveQuotaModal(true)}>
+                        <Sliders size={14} /> Adjust Quotas
+                      </button>
+                    </div>
+                  )}
+
+                  <table className="table">
+                    <thead>
+                      <tr>
+                        <th>Leave Type</th>
+                        <th>Dates</th>
+                        <th>Days</th>
+                        <th>Status</th>
+                        <th>Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {empDetails?.recentLeaves?.length === 0 ? (
+                        <tr>
+                          <td colSpan="5" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No leave requests recorded.</td>
+                        </tr>
+                      ) : (
+                        empDetails?.recentLeaves?.map((l) => (
+                          <tr key={l.id}>
+                            <td style={{ textTransform: 'capitalize', fontWeight: '700' }}>{l.leave_type}</td>
+                            <td>{l.start_date} ~ {l.end_date}</td>
+                            <td>{l.days_count} days</td>
+                            <td><span className={`badge badge-${l.status === 'approved' ? 'success' : (l.status === 'pending' ? 'warning' : 'danger')}`}>{l.status}</span></td>
+                            <td style={{ fontSize: '0.8rem' }}>"{l.reason}"</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               )}
 
@@ -996,6 +1347,72 @@ export default function Employees() {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          SINGLE EMPLOYEE LEAVE QUOTA MODAL
+          ========================================== */}
+      {showLeaveQuotaModal && selectedEmp && (
+        <div className="modal-backdrop" onClick={() => setShowLeaveQuotaModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Sliders size={20} color="var(--primary)" />
+                <h3>Set Leave Quotas for {selectedEmp.first_name}</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setShowLeaveQuotaModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEmpQuota}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label className="form-label">Vacation Days Allotted</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={empQuotaForm.vacation_days}
+                    onChange={(e) => setEmpQuotaForm({ ...empQuotaForm, vacation_days: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Sick Days Allotted</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={empQuotaForm.sick_days}
+                    onChange={(e) => setEmpQuotaForm({ ...empQuotaForm, sick_days: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Emergency Days Allotted</label>
+                  <input
+                    type="number"
+                    min="0"
+                    className="form-control"
+                    value={empQuotaForm.emergency_days}
+                    onChange={(e) => setEmpQuotaForm({ ...empQuotaForm, emergency_days: e.target.value })}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowLeaveQuotaModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Leave Quotas
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

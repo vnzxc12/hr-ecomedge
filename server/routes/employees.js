@@ -210,11 +210,11 @@ router.post('/', authenticate, requireManager, (req, res) => {
         VALUES (?, ?, ?, ?, ?)
       `).run(finalUsername, passwordHash, userRole, createdEmpId, avatar_url || null);
 
-      // Initialize leave balance
+      // Initialize leave balance with 0 days (manager can allocate later)
       const currentYear = new Date().getFullYear();
       db.prepare(`
         INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
-        VALUES (?, ?, 15, 10, 5, 0, 0, 0)
+        VALUES (?, ?, 0, 0, 0, 0, 0, 0)
       `).run(createdEmpId, currentYear);
     })();
 

@@ -5,16 +5,21 @@ const bcrypt = require('bcryptjs');
 const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
-// Ensure DB directory exists
-const dbDir = path.join(__dirname, 'data');
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+// Determine DB directory (Use /tmp on Vercel/Serverless)
+const isServerless = Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.NOW_REGION);
+const dbDir = isServerless ? '/tmp' : path.join(__dirname, 'data');
+if (!isServerless && !fs.existsSync(dbDir)) {
+  try {
+    fs.mkdirSync(dbDir, { recursive: true });
+  } catch (e) {}
 }
 
 // Uploads directory
-const uploadsDir = path.join(__dirname, '..', 'uploads');
+const uploadsDir = isServerless ? path.join('/tmp', 'uploads') : path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
+  try {
+    fs.mkdirSync(uploadsDir, { recursive: true });
+  } catch (e) {}
 }
 
 // Supabase client
@@ -31,11 +36,15 @@ if (supabaseUrl && supabaseKey) {
   }
 }
 
-// SQLite Database Connection (Local Fallback)
-const dbPath = path.join(dbDir, 'hr_ecomedge.db');
+// SQLite Database Connection (Local / Serverless /tmp Fallback)
+const dbPath = isServerless ? path.join('/tmp', 'hr_ecomedge.db') : path.join(dbDir, 'hr_ecomedge.db');
 const sqlite = new Database(dbPath);
-sqlite.pragma('journal_mode = WAL');
-sqlite.pragma('foreign_keys = ON');
+try {
+  sqlite.pragma('journal_mode = WAL');
+} catch (e) {}
+try {
+  sqlite.pragma('foreign_keys = ON');
+} catch (e) {}
 
 function initSchema() {
   sqlite.exec(`
@@ -275,9 +284,9 @@ function seedIfEmpty() {
     insertUser.run(1, 'admin', passwordHashAdmin, 'manager', 1);
     insertUser.run(2, 'manager', passwordHashMgr, 'manager', 2);
 
-    // 3. Leave Balances
-    insertBalance.run(1, currentYear, 15, 10, 5, 0, 0, 0);
-    insertBalance.run(2, currentYear, 15, 10, 5, 0, 0, 0);
+    // 3. Leave Balances (Starts at 0)
+    insertBalance.run(1, currentYear, 0, 0, 0, 0, 0, 0);
+    insertBalance.run(2, currentYear, 0, 0, 0, 0, 0, 0);
   })();
 
   console.log('✅ Initial accounts (admin / admin123 and manager / password01) initialized!');

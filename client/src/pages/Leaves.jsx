@@ -11,13 +11,16 @@ import {
   AlertCircle,
   X,
   MessageSquare,
-  Calendar
+  Calendar,
+  Sliders,
+  Users
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 export default function Leaves() {
   const { isManager, showToast } = useAuth();
   const [leaves, setLeaves] = useState([]);
+  const [employeesList, setEmployeesList] = useState([]);
   const [balance, setBalance] = useState(null);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('');
@@ -25,6 +28,7 @@ export default function Leaves() {
   // Modals
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
   const [selectedLeave, setSelectedLeave] = useState(null);
   const [reviewStatus, setReviewStatus] = useState('approved');
   const [reviewNotes, setReviewNotes] = useState('');
@@ -38,12 +42,27 @@ export default function Leaves() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Quota Form (Manager)
+  const [quotaForm, setQuotaForm] = useState({
+    employee_id: '',
+    vacation_days: 0,
+    sick_days: 0,
+    emergency_days: 0
+  });
+
   const loadData = async () => {
     setLoading(true);
     try {
       if (isManager) {
-        const res = await api.leaves.getAll({ status: statusFilter });
-        setLeaves(res.leaves || []);
+        const [leavesRes, empsRes] = await Promise.all([
+          api.leaves.getAll({ status: statusFilter }),
+          api.employees.getAll()
+        ]);
+        setLeaves(leavesRes.leaves || []);
+        setEmployeesList(empsRes.employees || []);
+        if (empsRes.employees?.length > 0 && !quotaForm.employee_id) {
+          setQuotaForm(prev => ({ ...prev, employee_id: empsRes.employees[0].id }));
+        }
       } else {
         const res = await api.leaves.getMy();
         setLeaves(res.leaves || []);
@@ -103,6 +122,53 @@ export default function Leaves() {
     }
   };
 
+  const handleSaveQuota = async (e) => {
+    e.preventDefault();
+    if (!quotaForm.employee_id) {
+      showToast('Please select an employee.', 'warning');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await api.leaves.updateBalance(quotaForm.employee_id, {
+        vacation_days: parseInt(quotaForm.vacation_days, 10) || 0,
+        sick_days: parseInt(quotaForm.sick_days, 10) || 0,
+        emergency_days: parseInt(quotaForm.emergency_days, 10) || 0
+      });
+      showToast('Leave balances and quotas updated successfully!', 'success');
+      setShowQuotaModal(false);
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleEmployeeSelectForQuota = async (empId) => {
+    setQuotaForm(prev => ({ ...prev, employee_id: empId }));
+    try {
+      const res = await api.employees.getById(empId);
+      if (res.leaveBalance) {
+        setQuotaForm({
+          employee_id: empId,
+          vacation_days: res.leaveBalance.vacation_days || 0,
+          sick_days: res.leaveBalance.sick_days || 0,
+          emergency_days: res.leaveBalance.emergency_days || 0
+        });
+      } else {
+        setQuotaForm({
+          employee_id: empId,
+          vacation_days: 0,
+          sick_days: 0,
+          emergency_days: 0
+        });
+      }
+    } catch (err) {
+      // silent fallback
+    }
+  };
+
   // Compute days count preview
   const getDaysCount = () => {
     if (!applyForm.start_date || !applyForm.end_date) return 0;
@@ -122,15 +188,24 @@ export default function Leaves() {
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
             {isManager
-              ? 'Review pending time-off applications, adjust quotas, and track department coverage.'
+              ? 'Review pending time-off applications, assign leave day quotas (starts at 0), and track department coverage.'
               : 'Submit vacation or sick leave requests and check your remaining quotas.'}
           </p>
         </div>
 
-        <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}>
-          <Plus size={18} />
-          <span>Apply for Leave</span>
-        </button>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          {isManager && (
+            <button className="btn btn-secondary" onClick={() => setShowQuotaModal(true)}>
+              <Sliders size={18} />
+              <span>Manage Leave Quotas</span>
+            </button>
+          )}
+
+          <button className="btn btn-primary" onClick={() => setShowApplyModal(true)}>
+            <Plus size={18} />
+            <span>Apply for Leave</span>
+          </button>
+        </div>
       </div>
 
       {/* Employee Balances Widget */}
@@ -142,7 +217,7 @@ export default function Leaves() {
               <div className="value" style={{ color: 'var(--success)' }}>
                 {balance.vacation_days - balance.vacation_used} Days Left
               </div>
-              <div className="subtext">Used: {balance.vacation_used} of {balance.vacation_days} total</div>
+              <div className="subtext">Used: {balance.vacation_used} of {balance.vacation_days} total allotted</div>
             </div>
             <div className="stat-icon emerald"><CalendarDays size={22} /></div>
           </div>
@@ -153,7 +228,7 @@ export default function Leaves() {
               <div className="value" style={{ color: 'var(--warning)' }}>
                 {balance.sick_days - balance.sick_used} Days Left
               </div>
-              <div className="subtext">Used: {balance.sick_used} of {balance.sick_days} total</div>
+              <div className="subtext">Used: {balance.sick_used} of {balance.sick_days} total allotted</div>
             </div>
             <div className="stat-icon amber"><CheckCircle2 size={22} /></div>
           </div>
@@ -164,7 +239,7 @@ export default function Leaves() {
               <div className="value" style={{ color: 'var(--accent-cyan)' }}>
                 {balance.emergency_days - balance.emergency_used} Days Left
               </div>
-              <div className="subtext">Used: {balance.emergency_used} of {balance.emergency_days} total</div>
+              <div className="subtext">Used: {balance.emergency_used} of {balance.emergency_days} total allotted</div>
             </div>
             <div className="stat-icon cyan"><AlertCircle size={22} /></div>
           </div>
@@ -376,6 +451,94 @@ export default function Leaves() {
                 </button>
                 <button type="submit" className="btn btn-primary" disabled={submitting}>
                   {submitting ? 'Submitting...' : 'Submit Leave Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          MANAGER MANAGE QUOTAS MODAL
+          ========================================== */}
+      {showQuotaModal && (
+        <div className="modal-backdrop" onClick={() => setShowQuotaModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Sliders size={20} color="var(--primary)" />
+                <h3>Assign & Edit Leave Day Quotas</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setShowQuotaModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveQuota}>
+              <div className="modal-body">
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                  Select an employee and set or edit their annual allotted leave balances (Vacation, Sick, and Emergency days).
+                </p>
+
+                <div className="form-group">
+                  <label className="form-label">Select Employee *</label>
+                  <select
+                    className="form-control"
+                    value={quotaForm.employee_id}
+                    onChange={(e) => handleEmployeeSelectForQuota(e.target.value)}
+                    required
+                  >
+                    {employeesList.map((emp) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.first_name} {emp.last_name} ({emp.employee_code} - {emp.department})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group">
+                    <label className="form-label">Vacation Days Allotted</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control"
+                      value={quotaForm.vacation_days}
+                      onChange={(e) => setQuotaForm({ ...quotaForm, vacation_days: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Sick Days Allotted</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control"
+                      value={quotaForm.sick_days}
+                      onChange={(e) => setQuotaForm({ ...quotaForm, sick_days: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Emergency Days Allotted</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="form-control"
+                      value={quotaForm.emergency_days}
+                      onChange={(e) => setQuotaForm({ ...quotaForm, emergency_days: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowQuotaModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={submitting}>
+                  {submitting ? 'Saving...' : 'Save Leave Quotas'}
                 </button>
               </div>
             </form>
