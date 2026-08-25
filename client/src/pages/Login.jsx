@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import {
-  Building2,
   Lock,
   User,
   ShieldCheck,
   Clock,
   Banknote,
   FolderLock,
-  Sparkles,
   ArrowRight,
-  CheckCircle2
+  Moon,
+  Sparkles
 } from 'lucide-react';
+import EcomEdgeLogo from '../components/UI/EcomEdgeLogo';
 
 export default function Login() {
   const { login } = useAuth();
@@ -51,38 +51,17 @@ export default function Login() {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(ellipse at top, #1e1b4b 0%, #0b0f19 70%)',
+      background: 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)',
       padding: '1.5rem',
-      position: 'relative',
-      overflow: 'hidden'
+      position: 'relative'
     }}>
-      {/* Background glowing orbs */}
-      <div style={{
-        position: 'absolute',
-        top: '15%',
-        left: '10%',
-        width: '450px',
-        height: '450px',
-        background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)',
-        pointerEvents: 'none'
-      }} />
-      <div style={{
-        position: 'absolute',
-        bottom: '10%',
-        right: '10%',
-        width: '400px',
-        height: '400px',
-        background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
-        pointerEvents: 'none'
-      }} />
-
       <div style={{
         width: '100%',
         maxWidth: '1050px',
         display: 'grid',
         gridTemplateColumns: '1.1fr 1fr',
-        background: 'var(--bg-secondary)',
-        border: '1px solid var(--border-color)',
+        background: '#ffffff',
+        border: '1px solid #e2e8f0',
         borderRadius: 'var(--radius-lg)',
         boxShadow: 'var(--shadow-lg)',
         overflow: 'hidden',
@@ -90,67 +69,99 @@ export default function Login() {
       }}>
         {/* Left Side: Brand & Feature Showcase */}
         <div style={{
-          background: 'linear-gradient(145deg, #111827 0%, #1e1b4b 100%)',
+          background: 'linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%)',
           padding: '3rem 2.5rem',
-          borderRight: '1px solid var(--border-color)',
+          borderRight: '1px solid #e2e8f0',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between'
         }}>
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem' }}>
-              <div className="brand-icon" style={{ width: '46px', height: '46px' }}>
-                <Building2 size={26} />
+            <div style={{ marginBottom: '1.75rem' }}>
+              <EcomEdgeLogo size={46} />
+            </div>
+
+            {/* Poster Headline */}
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{
+                fontFamily: 'var(--font-heading)',
+                fontSize: '2.4rem',
+                fontWeight: '900',
+                lineHeight: '1',
+                color: 'var(--brand-navy)',
+                letterSpacing: '-0.02em'
+              }}>
+                WE'RE <span style={{ color: 'var(--brand-green)' }}>OPERATING!</span>
               </div>
-              <div>
-                <h1 style={{ fontSize: '1.5rem', fontWeight: '800', color: '#ffffff' }}>HR-EcomEdge</h1>
-                <p style={{ fontSize: '0.8rem', color: 'var(--accent-purple)', fontWeight: '600' }}>
-                  Enterprise Workforce & HR Operations
-                </p>
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.4rem',
+                background: 'var(--brand-green)',
+                color: '#ffffff',
+                fontSize: '0.8rem',
+                fontWeight: '800',
+                padding: '4px 12px',
+                borderRadius: 'var(--radius-full)',
+                marginTop: '0.6rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.04em'
+              }}>
+                HR & E-Commerce Management System
               </div>
             </div>
 
-            <p style={{ color: '#cbd5e1', fontSize: '0.95rem', lineHeight: '1.6', marginBottom: '2rem' }}>
-              Next-generation HR ecosystem engineered for high-performance teams. Real-time time clock, automated payroll, document security vault, and employee self-service.
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: '1.6', marginBottom: '1.75rem' }}>
+              Enterprise workforce operations suite for attendance time logs, automated payroll computation, secure employee records, and self-service.
             </p>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ background: 'rgba(99, 102, 241, 0.2)', padding: '6px', borderRadius: '8px', color: '#818cf8' }}>
+                <div style={{ background: 'var(--brand-green-light)', padding: '7px', borderRadius: '8px', color: 'var(--brand-green)' }}>
                   <Clock size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: '#ffffff' }}>Live Punch Clock & Breaks</h4>
-                  <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>One-click shift timer, lunch breaks, and automated overtime.</p>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Shift Tracker & Punch Clock</h4>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Live Time In, Lunch Breaks, Overtime, and Night Shift tracking.</p>
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ background: 'rgba(16, 185, 129, 0.2)', padding: '6px', borderRadius: '8px', color: '#34d399' }}>
+                <div style={{ background: 'rgba(10, 25, 49, 0.08)', padding: '7px', borderRadius: '8px', color: 'var(--brand-navy)' }}>
                   <Banknote size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: '#ffffff' }}>Automated Payroll Engine</h4>
-                  <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Instant gross/net computations and itemized printable payslips.</p>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Automated Payroll & Payslips</h4>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Instant earnings calculator and official printable itemized slips.</p>
                 </div>
               </div>
 
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
-                <div style={{ background: 'rgba(6, 182, 212, 0.2)', padding: '6px', borderRadius: '8px', color: '#22d3ee' }}>
+                <div style={{ background: 'var(--brand-green-light)', padding: '7px', borderRadius: '8px', color: 'var(--brand-green)' }}>
                   <FolderLock size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: '#ffffff' }}>Encrypted Document Vault</h4>
-                  <p style={{ fontSize: '0.78rem', color: '#94a3b8' }}>Self-service CV, government IDs, and contract storage.</p>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Vault for CV & Government IDs</h4>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Self-service upload for resumes, passports, and signed contracts.</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ marginTop: '2rem', paddingTop: '1.25rem', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
-              <ShieldCheck size={16} color="#10b981" />
-              <span>Username & Password Authentication • No Email Required</span>
+          <div style={{ marginTop: '2rem', paddingTop: '1.25rem', borderTop: '1px solid #e2e8f0' }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              background: '#0A1931',
+              color: '#ffffff',
+              padding: '6px 14px',
+              borderRadius: 'var(--radius-full)',
+              fontSize: '0.78rem',
+              fontWeight: '700'
+            }}>
+              <Moon size={14} color="#00d65b" />
+              <span>Shift Support: 12AM – 8AM / Flexi Shifts</span>
             </div>
           </div>
         </div>
@@ -158,9 +169,9 @@ export default function Login() {
         {/* Right Side: Login Form */}
         <div style={{ padding: '3rem 2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
           <div style={{ marginBottom: '1.75rem' }}>
-            <h2 style={{ fontSize: '1.5rem', marginBottom: '0.35rem' }}>Sign In to Portal</h2>
+            <h2 style={{ fontSize: '1.6rem', color: 'var(--brand-navy)', marginBottom: '0.35rem' }}>Sign In to Portal</h2>
             <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-              Enter your system username and password to proceed.
+              Enter your assigned username and password to log in.
             </p>
           </div>
 
@@ -226,17 +237,17 @@ export default function Login() {
 
           {/* Quick Demo Access Chips */}
           <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontWeight: '700', textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: '0.75rem' }}>
-              Quick Demo Accounts
+            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
+              Demo Access Accounts
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
               <button
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleQuickDemo('admin', 'admin123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.5rem 0.75rem' }}
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
               >
-                <span style={{ fontWeight: '700', color: 'var(--primary)' }}>👑 Manager / Owner</span>
+                <span style={{ fontWeight: '800', color: 'var(--brand-navy)' }}>👑 Manager / Owner</span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>admin / admin123</span>
               </button>
 
@@ -244,9 +255,9 @@ export default function Login() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleQuickDemo('john.doe', 'password123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.5rem 0.75rem' }}
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
               >
-                <span style={{ fontWeight: '700', color: 'var(--success)' }}>👤 Employee (Eng)</span>
+                <span style={{ fontWeight: '800', color: 'var(--brand-green)' }}>👤 Employee (Eng)</span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>john.doe / password123</span>
               </button>
 
@@ -254,9 +265,9 @@ export default function Login() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleQuickDemo('sarah.smith', 'password123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.5rem 0.75rem' }}
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
               >
-                <span style={{ fontWeight: '700', color: 'var(--accent-purple)' }}>🎨 Employee (Design)</span>
+                <span style={{ fontWeight: '800', color: 'var(--brand-green)' }}>🎨 Employee (Design)</span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>sarah.smith / password123</span>
               </button>
 
@@ -264,9 +275,9 @@ export default function Login() {
                 type="button"
                 className="btn btn-secondary btn-sm"
                 onClick={() => handleQuickDemo('michael.lee', 'password123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.5rem 0.75rem' }}
+                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
               >
-                <span style={{ fontWeight: '700', color: 'var(--accent-cyan)' }}>📢 Employee (Marketing)</span>
+                <span style={{ fontWeight: '800', color: 'var(--brand-navy)' }}>📢 Employee (Marketing)</span>
                 <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>michael.lee / password123</span>
               </button>
             </div>

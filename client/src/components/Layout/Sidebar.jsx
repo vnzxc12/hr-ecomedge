@@ -15,6 +15,8 @@ import {
   ShieldAlert
 } from 'lucide-react';
 
+import EcomEdgeLogo from '../UI/EcomEdgeLogo';
+
 export default function Sidebar({ activeTab, onSelectTab, isOpen }) {
   const { user, isManager } = useAuth();
 
@@ -46,18 +48,11 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen }) {
     <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
       {/* Brand Header */}
       <div className="sidebar-brand">
-        <div className="brand-icon">
-          <Building size={22} />
-        </div>
-        <div className="brand-text">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-            <h2>HR-EcomEdge</h2>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.2rem' }}>
-            <span className="brand-badge">
-              {isManager ? 'Manager Portal' : 'Employee Self-Service'}
-            </span>
-          </div>
+        <EcomEdgeLogo size={36} />
+        <div style={{ marginTop: '0.4rem' }}>
+          <span className="brand-badge">
+            {isManager ? '👑 Manager Portal' : '👤 Employee Self-Service'}
+          </span>
         </div>
       </div>
 

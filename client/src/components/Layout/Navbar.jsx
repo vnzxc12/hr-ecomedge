@@ -46,11 +46,11 @@ export default function Navbar({ onToggleSidebar }) {
           </button>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: '600' }}>
-              HR-EcomEdge Suite
+            <span style={{ fontSize: '0.85rem', color: 'var(--brand-green)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              EcomEdge
             </span>
             <span style={{ color: 'var(--border-highlight)' }}>•</span>
-            <span style={{ fontSize: '0.88rem', fontWeight: '700', color: 'var(--text-primary)' }}>
+            <span style={{ fontSize: '0.88rem', fontWeight: '800', color: 'var(--text-primary)' }}>
               {isManager ? 'Manager / Executive Command' : 'Employee Self-Service (ESS)'}
             </span>
           </div>

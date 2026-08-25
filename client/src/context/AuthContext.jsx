@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [token, setToken] = useState(() => localStorage.getItem('hr_token'));
   const [loading, setLoading] = useState(true);
-  const [theme, setTheme] = useState(() => localStorage.getItem('hr_theme') || 'dark');
+  const [theme, setTheme] = useState(() => localStorage.getItem('hr_theme') || 'light');
   const [todayPunch, setTodayPunch] = useState(null);
   const [toast, setToast] = useState(null);
 
