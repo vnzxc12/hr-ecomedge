@@ -113,7 +113,7 @@ router.get('/:id', authenticate, (req, res) => {
 });
 
 // POST /api/employees (Manager create employee + credentials)
-router.post('/', authenticate, requireManager, (req, res) => {
+router.post('/', authenticate, requireManager, async (req, res) => {
   try {
     let {
       first_name,
@@ -173,50 +173,104 @@ router.post('/', authenticate, requireManager, (req, res) => {
 
     let createdEmpId = null;
 
-    db.transaction(() => {
-      // Insert employee record
-      const empResult = db.prepare(`
-        INSERT INTO employees (
-          employee_code, first_name, last_name, job_title, department,
-          employment_status, employment_type, hire_date, hourly_rate,
-          monthly_salary, phone, address, emergency_contact_name,
-          emergency_contact_phone, bank_name, bank_account_number, avatar_url
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        employeeCode,
-        first_name.trim(),
-        last_name.trim(),
-        job_title.trim(),
-        department.trim(),
-        employment_status || 'active',
-        employment_type || 'full_time',
+    // 4. If Supabase is connected, insert directly into Supabase
+    const { supabase, syncFromSupabase } = require('../db/database');
+    if (supabase) {
+      const { data: sbEmp, error: sbEmpErr } = await supabase.from('employees').insert({
+        employee_code: employeeCode,
+        first_name: first_name.trim(),
+        last_name: last_name.trim(),
+        job_title: job_title.trim(),
+        department: department.trim(),
+        employment_status: employment_status || 'active',
+        employment_type: employment_type || 'full_time',
         hire_date,
-        parseFloat(hourly_rate) || 0,
-        parseFloat(monthly_salary) || 0,
-        phone || null,
-        address || null,
-        emergency_contact_name || null,
-        emergency_contact_phone || null,
-        bank_name || null,
-        bank_account_number || null,
-        avatar_url || null
-      );
+        hourly_rate: parseFloat(hourly_rate) || 0,
+        monthly_salary: parseFloat(monthly_salary) || 0,
+        phone: phone || null,
+        address: address || null,
+        emergency_contact_name: emergency_contact_name || null,
+        emergency_contact_phone: emergency_contact_phone || null,
+        bank_name: bank_name || null,
+        bank_account_number: bank_account_number || null
+      }).select().single();
 
-      createdEmpId = empResult.lastInsertRowid;
+      if (sbEmpErr) {
+        console.error('❌ Supabase employee creation error:', sbEmpErr);
+      } else if (sbEmp) {
+        createdEmpId = sbEmp.id;
 
-      // Insert User login record with employee access
-      db.prepare(`
-        INSERT INTO users (username, password_hash, role, employee_id, avatar_url)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(finalUsername, passwordHash, userRole, createdEmpId, avatar_url || null);
+        // Insert User in Supabase
+        const { error: sbUserErr } = await supabase.from('users').insert({
+          username: finalUsername,
+          password_hash: passwordHash,
+          role: userRole,
+          employee_id: createdEmpId,
+          avatar_url: avatar_url || null
+        });
+        if (sbUserErr) console.error('❌ Supabase user creation error:', sbUserErr);
 
-      // Initialize leave balance with 0 days (manager can allocate later)
-      const currentYear = new Date().getFullYear();
-      db.prepare(`
-        INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
-        VALUES (?, ?, 0, 0, 0, 0, 0, 0)
-      `).run(createdEmpId, currentYear);
-    })();
+        // Insert Leave Balance in Supabase
+        await supabase.from('leave_balances').insert({
+          employee_id: createdEmpId,
+          year: new Date().getFullYear(),
+          vacation_days: 0,
+          sick_days: 0,
+          emergency_days: 0,
+          vacation_used: 0,
+          sick_used: 0,
+          emergency_used: 0
+        });
+
+        // Pull latest from Supabase into SQLite
+        await syncFromSupabase(true);
+      }
+    }
+
+    // 5. If local fallback or not created via Supabase, write to SQLite
+    if (!createdEmpId) {
+      db.transaction(() => {
+        const empResult = db.prepare(`
+          INSERT INTO employees (
+            employee_code, first_name, last_name, job_title, department,
+            employment_status, employment_type, hire_date, hourly_rate,
+            monthly_salary, phone, address, emergency_contact_name,
+            emergency_contact_phone, bank_name, bank_account_number, avatar_url
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          employeeCode,
+          first_name.trim(),
+          last_name.trim(),
+          job_title.trim(),
+          department.trim(),
+          employment_status || 'active',
+          employment_type || 'full_time',
+          hire_date,
+          parseFloat(hourly_rate) || 0,
+          parseFloat(monthly_salary) || 0,
+          phone || null,
+          address || null,
+          emergency_contact_name || null,
+          emergency_contact_phone || null,
+          bank_name || null,
+          bank_account_number || null,
+          avatar_url || null
+        );
+
+        createdEmpId = empResult.lastInsertRowid;
+
+        db.prepare(`
+          INSERT INTO users (username, password_hash, role, employee_id, avatar_url)
+          VALUES (?, ?, ?, ?, ?)
+        `).run(finalUsername, passwordHash, userRole, createdEmpId, avatar_url || null);
+
+        const currentYear = new Date().getFullYear();
+        db.prepare(`
+          INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
+          VALUES (?, ?, 0, 0, 0, 0, 0, 0)
+        `).run(createdEmpId, currentYear);
+      })();
+    }
 
     const created = db.prepare(`
       SELECT e.*, u.id as user_id, u.username, u.role
@@ -224,36 +278,6 @@ router.post('/', authenticate, requireManager, (req, res) => {
       LEFT JOIN users u ON u.employee_id = e.id
       WHERE e.id = ?
     `).get(createdEmpId);
-
-    // Push to Supabase async
-    pushToSupabase('employees', 'insert', {
-      id: createdEmpId,
-      employee_code: employeeCode,
-      first_name: first_name.trim(),
-      last_name: last_name.trim(),
-      job_title: job_title.trim(),
-      department: department.trim(),
-      employment_status: employment_status || 'active',
-      employment_type: employment_type || 'full_time',
-      hire_date,
-      hourly_rate: parseFloat(hourly_rate) || 0,
-      monthly_salary: parseFloat(monthly_salary) || 0,
-      phone: phone || null,
-      address: address || null,
-      emergency_contact_name: emergency_contact_name || null,
-      emergency_contact_phone: emergency_contact_phone || null,
-      bank_name: bank_name || null,
-      bank_account_number: bank_account_number || null,
-      avatar_url: avatar_url || null
-    }).catch(() => {});
-
-    pushToSupabase('users', 'insert', {
-      username: finalUsername,
-      password_hash: passwordHash,
-      role: userRole,
-      employee_id: createdEmpId,
-      avatar_url: avatar_url || null
-    }).catch(() => {});
 
     res.status(201).json({
       message: `Employee ${first_name} ${last_name} created successfully!`,
