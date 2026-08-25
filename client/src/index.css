@@ -523,6 +523,32 @@ input, select, textarea {
 
 [data-theme='dark'] .stat-icon.purple { background: rgba(248, 250, 252, 0.1); color: #f8fafc; }
 
+/* User Avatar & Photo Component */
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand-navy);
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.9rem;
+  overflow: hidden;
+  flex-shrink: 0;
+  position: relative;
+  border: 1px solid var(--border-color);
+}
+
+.user-avatar img {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  display: block !important;
+  border-radius: 50% !important;
+}
+
 /* Buttons */
 .btn {
   display: inline-flex;

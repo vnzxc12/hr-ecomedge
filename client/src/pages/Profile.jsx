@@ -61,6 +61,8 @@ export default function Profile() {
     loadProfile();
   }, [user]);
 
+  const [localAvatarPreview, setLocalAvatarPreview] = useState(null);
+
   const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -70,19 +72,33 @@ export default function Profile() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append('avatar', file);
+    // Instant local preview
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const base64Url = reader.result;
+      setLocalAvatarPreview(base64Url);
 
-    setUploadingAvatar(true);
-    try {
-      const res = await api.auth.uploadAvatar(formData);
-      showToast('Profile picture uploaded successfully!', 'success');
-      await refreshUser();
-    } catch (err) {
-      showToast(err.message, 'danger');
-    } finally {
-      setUploadingAvatar(false);
-    }
+      setUploadingAvatar(true);
+      try {
+        await api.auth.uploadAvatar(JSON.stringify({ avatar_url: base64Url }), true);
+        showToast('Profile picture updated and saved!', 'success');
+        await refreshUser();
+      } catch (err) {
+        // If JSON fails, try formData
+        try {
+          const formData = new FormData();
+          formData.append('avatar', file);
+          await api.auth.uploadAvatar(formData);
+          showToast('Profile picture updated and saved!', 'success');
+          await refreshUser();
+        } catch (innerErr) {
+          showToast(innerErr.message, 'danger');
+        }
+      } finally {
+        setUploadingAvatar(false);
+      }
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleUpdateProfile = async (e) => {
@@ -150,8 +166,8 @@ export default function Profile() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
               <div style={{ position: 'relative' }}>
                 <div className="user-avatar" style={{ width: '70px', height: '70px', fontSize: '1.6rem', overflow: 'hidden' }}>
-                  {user?.avatar_url ? (
-                    <img src={user.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  {localAvatarPreview || user?.avatar_url ? (
+                    <img src={localAvatarPreview || user?.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
                     user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
                   )}

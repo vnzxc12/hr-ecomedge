@@ -223,7 +223,7 @@ export default function Employees() {
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...formData };
+      const payload = { ...formData, avatar_url: addAvatarPreview || null };
       const res = await api.employees.create(payload);
       showToast(res.message, 'success');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
@@ -282,7 +282,8 @@ export default function Employees() {
     e.preventDefault();
     if (!selectedEmp) return;
     try {
-      await api.employees.update(selectedEmp.id, editFormData);
+      const payload = { ...editFormData, avatar_url: editAvatarPreview || selectedEmp.avatar_url || null };
+      await api.employees.update(selectedEmp.id, payload);
 
       if (editAvatarFile) {
         try {

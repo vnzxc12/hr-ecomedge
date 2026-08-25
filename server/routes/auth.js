@@ -136,27 +136,43 @@ router.post('/reset-password/:id', authenticate, requireManager, (req, res) => {
 });
 
 const upload = require('../middleware/upload');
+const fs = require('fs');
+const { supabase } = require('../db/database');
 
 // POST /api/auth/avatar (Upload/Update Profile Picture)
-router.post('/avatar', authenticate, upload.single('avatar'), (req, res) => {
+router.post('/avatar', authenticate, (req, res, next) => {
+  if (req.is('application/json') || req.body?.avatar_url) {
+    return next();
+  }
+  upload.single('avatar')(req, res, next);
+}, async (req, res) => {
   try {
-    if (!req.file) {
+    let avatarUrl = req.body?.avatar_url;
+
+    if (req.file) {
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const mimeType = req.file.mimetype || 'image/jpeg';
+      avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+
+    if (!avatarUrl) {
       return res.status(400).json({ error: 'Please select an image file to upload.' });
     }
 
-    const avatarUrl = `/uploads/${req.file.filename}`;
+    // 1. Update SQLite
+    db.prepare('UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(avatarUrl, req.user.id);
 
-    db.transaction(() => {
-      // 1. Update users table
-      db.prepare('UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run(avatarUrl, req.user.id);
+    if (req.user.employee_id) {
+      db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(avatarUrl, req.user.employee_id);
+    }
 
-      // 2. Update linked employee record if present
-      if (req.user.employee_id) {
-        db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-          .run(avatarUrl, req.user.employee_id);
-      }
-    })();
+    // 2. Update Supabase
+    if (supabase) {
+      await supabase.from('users').update({ avatar_url: avatarUrl }).eq('id', req.user.id);
+    }
 
     res.json({
       message: 'Profile picture updated successfully!',

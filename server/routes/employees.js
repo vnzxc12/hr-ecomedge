@@ -419,23 +419,39 @@ router.delete('/:id', authenticate, requireManager, (req, res) => {
 });
 
 const upload = require('../middleware/upload');
+const fs = require('fs');
+const { supabase } = require('../db/database');
 
 // POST /api/employees/:id/avatar (Upload photo for employee)
-router.post('/:id/avatar', authenticate, requireManager, upload.single('avatar'), (req, res) => {
+router.post('/:id/avatar', authenticate, requireManager, (req, res, next) => {
+  if (req.is('application/json') || req.body?.avatar_url) {
+    return next();
+  }
+  upload.single('avatar')(req, res, next);
+}, async (req, res) => {
   try {
     const empId = parseInt(req.params.id, 10);
-    if (!req.file) {
+    let avatarUrl = req.body?.avatar_url;
+
+    if (req.file) {
+      const fileBuffer = fs.readFileSync(req.file.path);
+      const mimeType = req.file.mimetype || 'image/jpeg';
+      avatarUrl = `data:${mimeType};base64,${fileBuffer.toString('base64')}`;
+      try { fs.unlinkSync(req.file.path); } catch (e) {}
+    }
+
+    if (!avatarUrl) {
       return res.status(400).json({ error: 'Please select an image file to upload.' });
     }
 
-    const avatarUrl = `/uploads/${req.file.filename}`;
+    db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+      .run(avatarUrl, empId);
+    db.prepare('UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_id = ?')
+      .run(avatarUrl, empId);
 
-    db.transaction(() => {
-      db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
-        .run(avatarUrl, empId);
-      db.prepare('UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_id = ?')
-        .run(avatarUrl, empId);
-    })();
+    if (supabase) {
+      await supabase.from('users').update({ avatar_url: avatarUrl }).eq('employee_id', empId);
+    }
 
     res.json({
       message: 'Employee profile photo updated successfully!',
