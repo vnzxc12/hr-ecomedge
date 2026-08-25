@@ -58,6 +58,7 @@ function initSchema() {
       emergency_contact_phone TEXT,
       bank_name TEXT,
       bank_account_number TEXT,
+      avatar_url TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
@@ -225,6 +226,17 @@ function initSchema() {
       FOREIGN KEY (assigned_to) REFERENCES employees(id) ON DELETE SET NULL
     );
   `);
+
+  try {
+    sqlite.exec('ALTER TABLE employees ADD COLUMN avatar_url TEXT');
+  } catch (e) {
+    // Column already exists
+  }
+  try {
+    sqlite.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
+  } catch (e) {
+    // Column already exists
+  }
 }
 
 // Seed clean initial accounts: admin and manager

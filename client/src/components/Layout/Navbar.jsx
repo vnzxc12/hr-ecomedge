@@ -88,8 +88,12 @@ export default function Navbar({ onToggleSidebar }) {
             borderRadius: 'var(--radius-full)',
             border: '1px solid var(--border-color)'
           }}>
-            <div className="user-avatar" style={{ width: '30px', height: '30px', fontSize: '0.75rem' }}>
-              {user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')}
+            <div className="user-avatar" style={{ width: '32px', height: '32px', fontSize: '0.75rem', overflow: 'hidden' }}>
+              {user?.avatar_url ? (
+                <img src={user.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
+              )}
             </div>
             <div style={{ lineHeight: '1.2' }}>
               <div style={{ fontSize: '0.82rem', fontWeight: '700' }}>

@@ -80,8 +80,12 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen }) {
       {/* Footer Info */}
       <div className="sidebar-footer">
         <div className="user-mini-card">
-          <div className="user-avatar">
-            {user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')}
+          <div className="user-avatar" style={{ overflow: 'hidden' }}>
+            {user?.avatar_url ? (
+              <img src={user.avatar_url} alt="User" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
+            )}
           </div>
           <div className="user-info-text">
             <div className="name">

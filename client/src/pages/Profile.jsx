@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import {
@@ -11,11 +11,15 @@ import {
   KeyRound,
   ShieldCheck,
   Building,
-  Briefcase
+  Briefcase,
+  Camera,
+  Upload
 } from 'lucide-react';
 
 export default function Profile() {
   const { user, isManager, refreshUser, showToast } = useAuth();
+  const fileInputRef = useRef(null);
+
   const [profile, setProfile] = useState({
     phone: '',
     address: '',
@@ -34,6 +38,7 @@ export default function Profile() {
 
   const [savingProfile, setSavingProfile] = useState(false);
   const [savingPass, setSavingPass] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -56,6 +61,30 @@ export default function Profile() {
     loadProfile();
   }, [user]);
 
+  const handleAvatarChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image file must be under 10MB.', 'warning');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('avatar', file);
+
+    setUploadingAvatar(true);
+    try {
+      const res = await api.auth.uploadAvatar(formData);
+      showToast('Profile picture uploaded successfully!', 'success');
+      await refreshUser();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
     if (!user?.employee_id) return;
@@ -63,7 +92,7 @@ export default function Profile() {
     try {
       await api.employees.update(user.employee_id, profile);
       showToast('Personal profile information updated.', 'success');
-      refreshUser();
+      await refreshUser();
     } catch (err) {
       showToast(err.message, 'danger');
     } finally {
@@ -100,23 +129,89 @@ export default function Profile() {
       <div style={{ marginBottom: '2rem' }}>
         <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>My Profile & Security</h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-          Manage your contact information, emergency numbers, payroll accounts, and password credentials.
+          Manage your photo, contact information, emergency numbers, payroll accounts, and password credentials.
         </p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2rem' }}>
         {/* Left Column: Personal Profile Form */}
         <div className="glass-card">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
-            <div className="user-avatar" style={{ width: '48px', height: '48px', fontSize: '1.1rem' }}>
-              {user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')}
+          {/* User Profile Picture & Header */}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '1.25rem',
+            marginBottom: '1.5rem',
+            borderBottom: '1px solid var(--border-color)',
+            paddingBottom: '1.25rem',
+            flexWrap: 'wrap'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ position: 'relative' }}>
+                <div className="user-avatar" style={{ width: '70px', height: '70px', fontSize: '1.6rem', overflow: 'hidden' }}>
+                  {user?.avatar_url ? (
+                    <img src={user.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  title="Upload / Change Profile Picture"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-4px',
+                    right: '-4px',
+                    width: '28px',
+                    height: '28px',
+                    borderRadius: 'var(--radius-full)',
+                    background: 'var(--brand-green)',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid #ffffff',
+                    cursor: 'pointer',
+                    boxShadow: 'var(--shadow-sm)'
+                  }}
+                >
+                  <Camera size={14} />
+                </button>
+              </div>
+
+              <div>
+                <h3 style={{ fontSize: '1.3rem', color: 'var(--text-primary)' }}>
+                  {user?.first_name} {user?.last_name}
+                </h3>
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  @{user?.username} • <span style={{ color: 'var(--brand-green)', fontWeight: '700' }}>{user?.job_title || (isManager ? 'Manager / Executive' : 'Employee')}</span>
+                </p>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Department: {user?.department || 'Operations'} ({user?.employee_code || 'EMP-000'})
+                </div>
+              </div>
             </div>
-            <div>
-              <h3 style={{ fontSize: '1.25rem' }}>{user?.first_name} {user?.last_name}</h3>
-              <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                @{user?.username} • {user?.job_title || (isManager ? 'Manager / Executive' : 'Employee')} ({user?.department || 'Operations'})
-              </p>
-            </div>
+
+            {/* Hidden Photo Upload Input */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleAvatarChange}
+              accept="image/*"
+              style={{ display: 'none' }}
+            />
+
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploadingAvatar}
+            >
+              <Upload size={14} />
+              <span>{uploadingAvatar ? 'Uploading...' : 'Change Photo'}</span>
+            </button>
           </div>
 
           <form onSubmit={handleUpdateProfile}>
@@ -197,7 +292,7 @@ export default function Profile() {
               </div>
             </div>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
               <button type="submit" className="btn btn-primary" disabled={savingProfile}>
                 <Save size={16} />
                 <span>{savingProfile ? 'Saving...' : 'Save Profile Changes'}</span>

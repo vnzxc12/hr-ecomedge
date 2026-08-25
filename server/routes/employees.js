@@ -115,7 +115,7 @@ router.get('/:id', authenticate, (req, res) => {
 // POST /api/employees (Manager create employee + credentials)
 router.post('/', authenticate, requireManager, (req, res) => {
   try {
-    const {
+    let {
       first_name,
       last_name,
       job_title,
@@ -133,42 +133,55 @@ router.post('/', authenticate, requireManager, (req, res) => {
       bank_account_number,
       username,
       password,
-      role
+      role,
+      avatar_url
     } = req.body;
 
     if (!first_name || !last_name || !job_title || !department || !hire_date) {
       return res.status(400).json({ error: 'First name, last name, job title, department, and hire date are required.' });
     }
 
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required to create the login account.' });
+    // 1. Auto-generate Username if not provided
+    let finalUsername = username ? username.trim().toLowerCase().replace(/\s+/g, '.') : '';
+    if (!finalUsername) {
+      const cleanFirst = first_name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanLast = last_name.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+      let baseUsername = `${cleanFirst}.${cleanLast}` || 'user';
+      finalUsername = baseUsername;
+      let counter = 1;
+      while (db.prepare('SELECT id FROM users WHERE LOWER(username) = ?').get(finalUsername)) {
+        counter++;
+        finalUsername = `${baseUsername}${counter}`;
+      }
+    } else {
+      // Check if manually provided username already taken
+      const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(finalUsername);
+      if (existingUser) {
+        return res.status(400).json({ error: `Username "${finalUsername}" is already taken.` });
+      }
     }
 
-    // Check if username already taken
-    const existingUser = db.prepare('SELECT id FROM users WHERE LOWER(username) = LOWER(?)').get(username.trim());
-    if (existingUser) {
-      return res.status(400).json({ error: `Username "${username.trim()}" is already taken.` });
-    }
+    // 2. Auto-generate Password if not provided
+    const finalPassword = password ? password.trim() : 'password123';
+    const passwordHash = bcrypt.hashSync(finalPassword, 10);
+    const userRole = role === 'manager' ? 'manager' : 'employee';
 
-    // Generate next employee code
+    // 3. Generate next employee code
     const lastEmp = db.prepare('SELECT id FROM employees ORDER BY id DESC LIMIT 1').get();
     const nextNum = lastEmp ? (lastEmp.id + 1) : 1;
     const employeeCode = `EMP-${String(nextNum).padStart(3, '0')}`;
 
-    const passwordHash = bcrypt.hashSync(password, 10);
-    const userRole = role === 'manager' ? 'manager' : 'employee';
-
     let createdEmpId = null;
 
     db.transaction(() => {
-      // 1. Insert employee record
+      // Insert employee record
       const empResult = db.prepare(`
         INSERT INTO employees (
           employee_code, first_name, last_name, job_title, department,
           employment_status, employment_type, hire_date, hourly_rate,
           monthly_salary, phone, address, emergency_contact_name,
-          emergency_contact_phone, bank_name, bank_account_number
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          emergency_contact_phone, bank_name, bank_account_number, avatar_url
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         employeeCode,
         first_name.trim(),
@@ -185,18 +198,19 @@ router.post('/', authenticate, requireManager, (req, res) => {
         emergency_contact_name || null,
         emergency_contact_phone || null,
         bank_name || null,
-        bank_account_number || null
+        bank_account_number || null,
+        avatar_url || null
       );
 
       createdEmpId = empResult.lastInsertRowid;
 
-      // 2. Insert User login record
+      // Insert User login record with employee access
       db.prepare(`
-        INSERT INTO users (username, password_hash, role, employee_id)
-        VALUES (?, ?, ?, ?)
-      `).run(username.trim().toLowerCase(), passwordHash, userRole, createdEmpId);
+        INSERT INTO users (username, password_hash, role, employee_id, avatar_url)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(finalUsername, passwordHash, userRole, createdEmpId, avatar_url || null);
 
-      // 3. Initialize leave balance
+      // Initialize leave balance
       const currentYear = new Date().getFullYear();
       db.prepare(`
         INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
@@ -204,11 +218,21 @@ router.post('/', authenticate, requireManager, (req, res) => {
       `).run(createdEmpId, currentYear);
     })();
 
-    const created = db.prepare('SELECT * FROM employees WHERE id = ?').get(createdEmpId);
+    const created = db.prepare(`
+      SELECT e.*, u.id as user_id, u.username, u.role
+      FROM employees e
+      LEFT JOIN users u ON u.employee_id = e.id
+      WHERE e.id = ?
+    `).get(createdEmpId);
 
     res.status(201).json({
-      message: `Employee ${first_name} ${last_name} created successfully with login username "@${username.trim().toLowerCase()}".`,
-      employee: created
+      message: `Employee ${first_name} ${last_name} created successfully!`,
+      employee: created,
+      credentials: {
+        username: finalUsername,
+        password: finalPassword,
+        role: userRole
+      }
     });
   } catch (err) {
     console.error('Create employee error:', err);
@@ -329,6 +353,35 @@ router.delete('/:id', authenticate, requireManager, (req, res) => {
   } catch (err) {
     console.error('Delete employee error:', err);
     res.status(500).json({ error: 'Failed to deactivate employee.' });
+  }
+});
+
+const upload = require('../middleware/upload');
+
+// POST /api/employees/:id/avatar (Upload photo for employee)
+router.post('/:id/avatar', authenticate, requireManager, upload.single('avatar'), (req, res) => {
+  try {
+    const empId = parseInt(req.params.id, 10);
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please select an image file to upload.' });
+    }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+
+    db.transaction(() => {
+      db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(avatarUrl, empId);
+      db.prepare('UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE employee_id = ?')
+        .run(avatarUrl, empId);
+    })();
+
+    res.json({
+      message: 'Employee profile photo updated successfully!',
+      avatar_url: avatarUrl
+    });
+  } catch (err) {
+    console.error('Employee avatar upload error:', err);
+    res.status(500).json({ error: 'Failed to upload employee photo.' });
   }
 });
 

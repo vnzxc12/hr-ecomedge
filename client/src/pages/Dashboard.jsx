@@ -235,8 +235,12 @@ export default function Dashboard({ onNavigate }) {
                       <tr key={log.id}>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                            <div className="user-avatar" style={{ width: '32px', height: '32px', fontSize: '0.75rem' }}>
-                              {log.first_name[0]}
+                            <div className="user-avatar" style={{ width: '32px', height: '32px', fontSize: '0.75rem', overflow: 'hidden' }}>
+                              {log.avatar_url ? (
+                                <img src={log.avatar_url} alt={log.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              ) : (
+                                log.first_name[0]
+                              )}
                             </div>
                             <div>
                               <div style={{ fontWeight: '700', fontSize: '0.88rem' }}>

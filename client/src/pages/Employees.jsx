@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import {
@@ -7,23 +7,25 @@ import {
   Search,
   Filter,
   Eye,
-  Edit2,
   Trash2,
   KeyRound,
-  X,
+  ShieldCheck,
   Building,
-  Briefcase,
   Phone,
   MapPin,
-  ShieldCheck,
-  CreditCard,
-  CheckCircle2,
-  Clock,
   Calendar,
+  Banknote,
   FolderLock,
+  Clock,
   Laptop,
-  GraduationCap
+  CheckCircle2,
+  X,
+  Copy,
+  Check,
+  Camera,
+  Upload
 } from 'lucide-react';
+import confetti from 'canvas-confetti';
 
 export default function Employees() {
   const { isManager, showToast } = useAuth();
@@ -37,16 +39,27 @@ export default function Employees() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
+  const [createdCredentials, setCreatedCredentials] = useState(null);
+  const [copied, setCopied] = useState(false);
+
   const [selectedEmp, setSelectedEmp] = useState(null);
   const [empDetails, setEmpDetails] = useState(null);
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
 
-  // Form states
+  // Photo upload in drawer
+  const drawerPhotoInputRef = useRef(null);
+  const addModalPhotoInputRef = useRef(null);
+  const [uploadingDrawerPhoto, setUploadingDrawerPhoto] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState(null);
+  const [avatarFile, setAvatarFile] = useState(null);
+
+  // Add Employee Form
   const [formData, setFormData] = useState({
     first_name: '',
     last_name: '',
     job_title: '',
-    department: 'Engineering',
+    department: 'Operations',
     employment_status: 'active',
     employment_type: 'full_time',
     hire_date: new Date().toISOString().split('T')[0],
@@ -56,21 +69,21 @@ export default function Employees() {
     address: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
-    bank_name: '',
+    bank_name: 'BDO',
     bank_account_number: '',
     username: '',
     password: '',
     role: 'employee'
   });
 
-  const [resetPasswordVal, setResetPasswordVal] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  // Reset password form
+  const [newPassword, setNewPassword] = useState('');
 
   const loadEmployees = async () => {
     setLoading(true);
     try {
-      const data = await api.employees.getAll({ search, department, status });
-      setEmployees(data.employees);
+      const res = await api.employees.getAll({ search, department, status });
+      setEmployees(res.employees || []);
     } catch (err) {
       showToast(err.message, 'danger');
     } finally {
@@ -85,7 +98,6 @@ export default function Employees() {
   const handleOpenDetail = async (emp) => {
     setSelectedEmp(emp);
     setShowDetailModal(true);
-    setActiveDetailTab('overview');
     try {
       const res = await api.employees.getById(emp.id);
       setEmpDetails(res);
@@ -94,18 +106,79 @@ export default function Employees() {
     }
   };
 
+  const handleAddModalPhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarFile(file);
+    setAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleDrawerPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedEmp) return;
+
+    const fd = new FormData();
+    fd.append('avatar', file);
+
+    setUploadingDrawerPhoto(true);
+    try {
+      const res = await api.employees.uploadAvatar(selectedEmp.id, fd);
+      showToast(res.message, 'success');
+      // Update local state
+      setSelectedEmp(prev => ({ ...prev, avatar_url: res.avatar_url }));
+      if (empDetails?.employee) {
+        setEmpDetails(prev => ({
+          ...prev,
+          employee: { ...prev.employee, avatar_url: res.avatar_url }
+        }));
+      }
+      loadEmployees();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setUploadingDrawerPhoto(false);
+    }
+  };
+
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
-    setSubmitting(true);
     try {
-      await api.employees.create(formData);
-      showToast('Employee and login credentials created successfully!', 'success');
+      const payload = { ...formData };
+      
+      // If user selected an avatar file, let's create the employee first, then upload avatar
+      const res = await api.employees.create(payload);
+      showToast(res.message, 'success');
+      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+
+      if (avatarFile && res.employee?.id) {
+        try {
+          const fd = new FormData();
+          fd.append('avatar', avatarFile);
+          await api.employees.uploadAvatar(res.employee.id, fd);
+        } catch (err) {
+          console.warn('Avatar upload skipped:', err.message);
+        }
+      }
+
+      // Show generated credentials modal
+      if (res.credentials) {
+        setCreatedCredentials({
+          name: `${formData.first_name} ${formData.last_name}`,
+          username: res.credentials.username,
+          password: res.credentials.password,
+          role: res.credentials.role
+        });
+        setShowCredentialsModal(true);
+      }
+
       setShowAddModal(false);
+      setAvatarFile(null);
+      setAvatarPreview(null);
       setFormData({
         first_name: '',
         last_name: '',
         job_title: '',
-        department: 'Engineering',
+        department: 'Operations',
         employment_status: 'active',
         employment_type: 'full_time',
         hire_date: new Date().toISOString().split('T')[0],
@@ -115,7 +188,7 @@ export default function Employees() {
         address: '',
         emergency_contact_name: '',
         emergency_contact_phone: '',
-        bank_name: '',
+        bank_name: 'BDO',
         bank_account_number: '',
         username: '',
         password: '',
@@ -124,39 +197,42 @@ export default function Employees() {
       loadEmployees();
     } catch (err) {
       showToast(err.message, 'danger');
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleResetPassword = async (e) => {
     e.preventDefault();
     if (!selectedEmp?.user_id) {
-      showToast('No user account linked to this employee.', 'danger');
+      showToast('This employee does not have a user account linked.', 'warning');
       return;
     }
-    setSubmitting(true);
     try {
-      await api.auth.resetPassword(selectedEmp.user_id, resetPasswordVal);
-      showToast(`Password for @${selectedEmp.username} updated!`, 'success');
+      const res = await api.auth.resetPassword(selectedEmp.user_id, newPassword);
+      showToast(res.message, 'success');
       setShowResetModal(false);
-      setResetPasswordVal('');
+      setNewPassword('');
     } catch (err) {
       showToast(err.message, 'danger');
-    } finally {
-      setSubmitting(false);
     }
   };
 
   const handleDeactivate = async (emp) => {
-    if (!window.confirm(`Are you sure you want to deactivate ${emp.first_name} ${emp.last_name}?`)) return;
+    if (!window.confirm(`Are you sure you want to terminate/deactivate ${emp.first_name} ${emp.last_name}?`)) {
+      return;
+    }
     try {
-      await api.employees.delete(emp.id);
-      showToast('Employee status set to Terminated.', 'info');
+      const res = await api.employees.delete(emp.id);
+      showToast(res.message, 'info');
       loadEmployees();
     } catch (err) {
       showToast(err.message, 'danger');
     }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
   return (
@@ -164,9 +240,9 @@ export default function Employees() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
-          <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>Employee Directory & Records</h1>
+          <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>Employee Directory & Profiles</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            Manage staff profiles, contracts, compensation settings, and user access credentials.
+            Comprehensive workforce records, profile photos, credentials management, and departmental allocations.
           </p>
         </div>
 
@@ -178,15 +254,15 @@ export default function Employees() {
         )}
       </div>
 
-      {/* Filter Bar */}
-      <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '1rem', alignItems: 'center' }}>
+      {/* Filter & Search Bar */}
+      <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '1rem' }}>
           <div style={{ position: 'relative' }}>
             <input
               type="text"
               className="form-control"
-              placeholder="Search by name, code, job title..."
               style={{ paddingLeft: '2.5rem' }}
+              placeholder="Search by name, employee code, job title, department..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -248,8 +324,12 @@ export default function Employees() {
                 <tr key={emp.id}>
                   <td>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div className="user-avatar">
-                        {emp.first_name[0]}
+                      <div className="user-avatar" style={{ overflow: 'hidden' }}>
+                        {emp.avatar_url ? (
+                          <img src={emp.avatar_url} alt={emp.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          emp.first_name[0]
+                        )}
                       </div>
                       <div>
                         <div style={{ fontWeight: '700', fontSize: '0.92rem' }}>
@@ -332,7 +412,7 @@ export default function Employees() {
       </div>
 
       {/* ==========================================
-          ADD EMPLOYEE MODAL (With Username & Password)
+          ADD EMPLOYEE MODAL (With Photo & Auto-Credentials)
           ========================================== */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
@@ -340,7 +420,7 @@ export default function Employees() {
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <UserPlus size={22} color="var(--primary)" />
-                <h3>Add New Employee & Login Account</h3>
+                <h3>Add New Employee</h3>
               </div>
               <button className="btn-icon" onClick={() => setShowAddModal(false)}>
                 <X size={18} />
@@ -349,33 +429,84 @@ export default function Employees() {
 
             <form onSubmit={handleCreateEmployee}>
               <div className="modal-body">
-                {/* 1. Account Credentials */}
-                <div style={{ background: 'var(--primary-light)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-focus)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <ShieldCheck size={18} color="var(--primary)" />
-                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>1. Portal Login Credentials (Username & Password)</h4>
+                {/* Photo & Basic Info Header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-color)' }}>
+                  <div style={{ position: 'relative' }}>
+                    <div className="user-avatar" style={{ width: '64px', height: '64px', fontSize: '1.5rem', overflow: 'hidden' }}>
+                      {avatarPreview ? (
+                        <img src={avatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <Camera size={26} color="var(--text-muted)" />
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => addModalPhotoInputRef.current?.click()}
+                      style={{
+                        position: 'absolute',
+                        bottom: '-4px',
+                        right: '-4px',
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: 'var(--radius-full)',
+                        background: 'var(--brand-green)',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #ffffff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Camera size={12} />
+                    </button>
                   </div>
+
+                  <input
+                    type="file"
+                    ref={addModalPhotoInputRef}
+                    onChange={handleAddModalPhotoSelect}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                  />
+
+                  <div>
+                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Profile Photo (Optional)</h4>
+                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                      Click the camera icon to select a profile image for this employee.
+                    </p>
+                  </div>
+                </div>
+
+                {/* 1. Account Credentials & Access Level */}
+                <div style={{ background: 'var(--primary-light)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-focus)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                    <ShieldCheck size={18} color="var(--primary)" />
+                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>1. Portal Login Credentials (Automatic Employee Access)</h4>
+                  </div>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
+                    ✨ If username or password are left empty, they will be <strong>auto-generated</strong> (e.g. <code>firstname.lastname</code> and <code>password123</code>) with standard employee access.
+                  </p>
+
                   <div className="form-row">
                     <div className="form-group">
-                      <label className="form-label">Username (No Email Needed) *</label>
+                      <label className="form-label">Username (Optional - Auto generated)</label>
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="e.g. alex.turner"
+                        placeholder="Leave blank to auto-generate"
                         value={formData.username}
                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                        required
                       />
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Initial Password *</label>
+                      <label className="form-label">Initial Password (Optional)</label>
                       <input
                         type="text"
                         className="form-control"
-                        placeholder="e.g. password123"
+                        placeholder="Default: password123"
                         value={formData.password}
                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                        required
                       />
                     </div>
                     <div className="form-group">
@@ -385,8 +516,8 @@ export default function Employees() {
                         value={formData.role}
                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                       >
-                        <option value="employee">Employee (Self-Service)</option>
-                        <option value="manager">Manager / Owner (Full Access)</option>
+                        <option value="employee">👤 Employee (Self-Service Access)</option>
+                        <option value="manager">👑 Manager / Owner (Full Access)</option>
                       </select>
                     </div>
                   </div>
@@ -422,7 +553,7 @@ export default function Employees() {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="+1 (555) 000-0000"
+                      placeholder="+63 900 000 0000"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
@@ -435,7 +566,7 @@ export default function Employees() {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="Street, City, Country"
+                      placeholder="e.g. Makati City, Metro Manila"
                       value={formData.address}
                       onChange={(e) => setFormData({ ...formData, address: e.target.value })}
                     />
@@ -445,7 +576,7 @@ export default function Employees() {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Jane Turner"
+                      placeholder="e.g. Maria Turner (Spouse)"
                       value={formData.emergency_contact_name}
                       onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
                     />
@@ -455,7 +586,7 @@ export default function Employees() {
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="+1 (555) 999-9999"
+                      placeholder="+63 900 000 0000"
                       value={formData.emergency_contact_phone}
                       onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
                     />
@@ -463,14 +594,14 @@ export default function Employees() {
                 </div>
 
                 {/* 3. Job & Compensation */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>3. Job Title & Compensation</h4>
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>3. Job Title & Compensation (PHP ₱)</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Job Title *</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Frontend Engineer"
+                      placeholder="e.g. E-Commerce Analyst"
                       value={formData.job_title}
                       onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
                       required
@@ -483,10 +614,10 @@ export default function Employees() {
                       value={formData.department}
                       onChange={(e) => setFormData({ ...formData, department: e.target.value })}
                     >
+                      <option value="Operations">Operations</option>
                       <option value="Engineering">Engineering</option>
                       <option value="Design & Product">Design & Product</option>
                       <option value="Marketing">Marketing</option>
-                      <option value="Operations">Operations</option>
                       <option value="Human Resources">Human Resources</option>
                     </select>
                   </div>
@@ -538,24 +669,24 @@ export default function Employees() {
                 </div>
 
                 {/* 4. Bank Information */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>4. Bank Details</h4>
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>4. Banking & Direct Deposit</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Bank Name</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Chase Bank"
+                      placeholder="e.g. BDO, BPI, UnionBank, GCash"
                       value={formData.bank_name}
                       onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Bank Account / IBAN</label>
+                    <label className="form-label">Account Number</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. **** 4910"
+                      placeholder="**** 1234"
                       value={formData.bank_account_number}
                       onChange={(e) => setFormData({ ...formData, bank_account_number: e.target.value })}
                     />
@@ -567,11 +698,67 @@ export default function Employees() {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Creating Employee...' : 'Save & Register Employee'}
+                <button type="submit" className="btn btn-primary">
+                  Create Employee & Account
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          CREDENTIALS CONFIRMATION MODAL
+          ========================================== */}
+      {showCredentialsModal && createdCredentials && (
+        <div className="modal-backdrop" onClick={() => setShowCredentialsModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header" style={{ background: 'var(--brand-green-light)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <CheckCircle2 size={22} color="var(--brand-green)" />
+                <h3 style={{ color: 'var(--brand-navy)' }}>Employee Credentials Created!</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setShowCredentialsModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                The login account for <strong>{createdCredentials.name}</strong> has been created with <strong>Employee Self-Service Access</strong>.
+              </p>
+
+              <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1.25rem', marginBottom: '1.25rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px dashed var(--border-color)', paddingBottom: '0.6rem' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Username</span>
+                  <strong style={{ fontFamily: 'monospace', fontSize: '1rem', color: 'var(--brand-navy)' }}>{createdCredentials.username}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px dashed var(--border-color)', paddingBottom: '0.6rem' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Initial Password</span>
+                  <strong style={{ fontFamily: 'monospace', fontSize: '1rem', color: 'var(--brand-green)' }}>{createdCredentials.password}</strong>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access Role</span>
+                  <span className="badge badge-success">{createdCredentials.role}</span>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                className="btn btn-secondary"
+                style={{ width: '100%' }}
+                onClick={() => copyToClipboard(`Username: ${createdCredentials.username}\nPassword: ${createdCredentials.password}`)}
+              >
+                {copied ? <Check size={16} color="var(--brand-green)" /> : <Copy size={16} />}
+                <span>{copied ? 'Copied to Clipboard!' : 'Copy Login Credentials'}</span>
+              </button>
+            </div>
+
+            <div className="modal-footer">
+              <button className="btn btn-primary" onClick={() => setShowCredentialsModal(false)}>
+                Done
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -583,15 +770,52 @@ export default function Employees() {
         <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
           <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div className="user-avatar" style={{ width: '42px', height: '42px' }}>
-                  {selectedEmp.first_name[0]}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                <div style={{ position: 'relative' }}>
+                  <div className="user-avatar" style={{ width: '52px', height: '52px', fontSize: '1.25rem', overflow: 'hidden' }}>
+                    {selectedEmp.avatar_url ? (
+                      <img src={selectedEmp.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      selectedEmp.first_name[0]
+                    )}
+                  </div>
+                  {isManager && (
+                    <button
+                      type="button"
+                      onClick={() => drawerPhotoInputRef.current?.click()}
+                      title="Upload Employee Photo"
+                      style={{
+                        position: 'absolute',
+                        bottom: '-4px',
+                        right: '-4px',
+                        width: '24px',
+                        height: '24px',
+                        borderRadius: 'var(--radius-full)',
+                        background: 'var(--brand-green)',
+                        color: '#ffffff',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: '2px solid #ffffff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <Camera size={12} />
+                    </button>
+                  )}
                 </div>
+
+                <input
+                  type="file"
+                  ref={drawerPhotoInputRef}
+                  onChange={handleDrawerPhotoUpload}
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                />
+
                 <div>
-                  <h3 style={{ fontSize: '1.2rem' }}>
-                    {selectedEmp.first_name} {selectedEmp.last_name}
-                  </h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  <h3>{selectedEmp.first_name} {selectedEmp.last_name}</h3>
+                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     {selectedEmp.employee_code} • {selectedEmp.job_title} ({selectedEmp.department})
                   </p>
                 </div>
@@ -601,8 +825,8 @@ export default function Employees() {
               </button>
             </div>
 
-            {/* Sub-tabs */}
-            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.5rem', borderBottom: '1px solid var(--border-color)', background: 'var(--bg-tertiary)', overflowX: 'auto' }}>
+            {/* Detail Tabs */}
+            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)' }}>
               <button
                 className={`btn btn-sm ${activeDetailTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setActiveDetailTab('overview')}
@@ -679,7 +903,8 @@ export default function Employees() {
                       <div style={{ fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                         <div><strong>Bank Name:</strong> {selectedEmp.bank_name || 'Not configured'}</div>
                         <div><strong>Account No:</strong> {selectedEmp.bank_account_number || 'Not configured'}</div>
-                        <div><strong>Employment Type:</strong> {selectedEmp.employment_type}</div>
+                        <div><strong>Hire Date:</strong> {selectedEmp.hire_date}</div>
+                        <div><strong>Type:</strong> {selectedEmp.employment_type}</div>
                       </div>
                     </div>
                   </div>
@@ -776,15 +1001,15 @@ export default function Employees() {
       )}
 
       {/* ==========================================
-          RESET PASSWORD MODAL
+          RESET PASSWORD MODAL (Manager only)
           ========================================== */}
       {showResetModal && selectedEmp && (
         <div className="modal-backdrop" onClick={() => setShowResetModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '450px' }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <KeyRound size={20} color="var(--accent-purple)" />
-                <h3>Reset Employee Password</h3>
+                <h3>Reset Password for @{selectedEmp.username}</h3>
               </div>
               <button className="btn-icon" onClick={() => setShowResetModal(false)}>
                 <X size={18} />
@@ -793,8 +1018,8 @@ export default function Employees() {
 
             <form onSubmit={handleResetPassword}>
               <div className="modal-body">
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                  Set a new password for <strong>{selectedEmp.first_name} {selectedEmp.last_name}</strong> (@{selectedEmp.username}).
+                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+                  Set a new password for employee <strong>{selectedEmp.first_name} {selectedEmp.last_name}</strong>.
                 </p>
 
                 <div className="form-group">
@@ -802,9 +1027,9 @@ export default function Employees() {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="Enter new password..."
-                    value={resetPasswordVal}
-                    onChange={(e) => setResetPasswordVal(e.target.value)}
+                    placeholder="Enter new password (min 6 chars)"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
                     required
                     minLength={6}
                   />
@@ -815,8 +1040,8 @@ export default function Employees() {
                 <button type="button" className="btn btn-secondary" onClick={() => setShowResetModal(false)}>
                   Cancel
                 </button>
-                <button type="submit" className="btn btn-primary" disabled={submitting}>
-                  {submitting ? 'Updating...' : 'Set New Password'}
+                <button type="submit" className="btn btn-primary">
+                  Update Password
                 </button>
               </div>
             </form>

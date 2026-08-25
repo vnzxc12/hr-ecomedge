@@ -51,6 +51,10 @@ export const api = {
     resetPassword: (userId, newPassword) => request(`/auth/reset-password/${userId}`, {
       method: 'POST',
       body: JSON.stringify({ newPassword })
+    }),
+    uploadAvatar: (formData) => request('/auth/avatar', {
+      method: 'POST',
+      body: formData
     })
   },
 
@@ -76,6 +80,10 @@ export const api = {
     }),
     delete: (id) => request(`/employees/${id}`, {
       method: 'DELETE'
+    }),
+    uploadAvatar: (id, formData) => request(`/employees/${id}/avatar`, {
+      method: 'POST',
+      body: formData
     })
   },
 

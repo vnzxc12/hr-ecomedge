@@ -135,4 +135,37 @@ router.post('/reset-password/:id', authenticate, requireManager, (req, res) => {
   }
 });
 
+const upload = require('../middleware/upload');
+
+// POST /api/auth/avatar (Upload/Update Profile Picture)
+router.post('/avatar', authenticate, upload.single('avatar'), (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Please select an image file to upload.' });
+    }
+
+    const avatarUrl = `/uploads/${req.file.filename}`;
+
+    db.transaction(() => {
+      // 1. Update users table
+      db.prepare('UPDATE users SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+        .run(avatarUrl, req.user.id);
+
+      // 2. Update linked employee record if present
+      if (req.user.employee_id) {
+        db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
+          .run(avatarUrl, req.user.employee_id);
+      }
+    })();
+
+    res.json({
+      message: 'Profile picture updated successfully!',
+      avatar_url: avatarUrl
+    });
+  } catch (err) {
+    console.error('Avatar upload error:', err);
+    res.status(500).json({ error: 'Failed to upload profile picture.' });
+  }
+});
+
 module.exports = router;
