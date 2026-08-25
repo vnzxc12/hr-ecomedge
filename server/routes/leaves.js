@@ -57,7 +57,7 @@ router.get('/all', authenticate, requireManager, (req, res) => {
       params.push(employee_id);
     }
 
-    query += ' ORDER BY CASE WHEN l.status = "pending" THEN 1 ELSE 2 END, l.created_at DESC';
+    query += " ORDER BY CASE WHEN l.status = 'pending' THEN 1 ELSE 2 END, l.created_at DESC";
     const leaves = db.prepare(query).all(...params);
 
     res.json({ leaves });

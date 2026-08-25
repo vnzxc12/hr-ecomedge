@@ -190,7 +190,7 @@ export default function Dashboard({ onNavigate }) {
           <div className="stat-card" onClick={() => onNavigate('payroll')} style={{ cursor: 'pointer' }}>
             <div className="stat-info">
               <div className="label">Last Payroll Run</div>
-              <div className="value">${(m.latestPayrollTotal || 0).toLocaleString()}</div>
+              <div className="value">₱{(m.latestPayrollTotal || 0).toLocaleString()}</div>
               <div className="subtext">Status: <span className="badge badge-success">{m.latestPayrollStatus}</span></div>
             </div>
             <div className="stat-icon">
@@ -568,17 +568,17 @@ export default function Dashboard({ onNavigate }) {
 
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', fontSize: '0.85rem' }}>
                   <span>Gross Earnings</span>
-                  <span style={{ fontWeight: '700' }}>${latestPayslip.gross_pay.toLocaleString()}</span>
+                  <span style={{ fontWeight: '700' }}>₱{latestPayslip.gross_pay.toLocaleString()}</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', fontSize: '0.85rem', color: 'var(--danger)' }}>
                   <span>Total Deductions</span>
-                  <span>-${(latestPayslip.tax_deduction + latestPayslip.social_deductions + latestPayslip.other_deductions).toLocaleString()}</span>
+                  <span>-₱{(latestPayslip.tax_deduction + latestPayslip.social_deductions + latestPayslip.other_deductions).toLocaleString()}</span>
                 </div>
 
                 <div style={{ borderTop: '1px solid var(--border-color)', marginTop: '0.75rem', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{ fontWeight: '700', fontSize: '0.95rem' }}>Net Take-Home Pay</span>
                   <span style={{ fontFamily: 'var(--font-heading)', fontSize: '1.4rem', fontWeight: '800', color: 'var(--success)' }}>
-                    ${latestPayslip.net_pay.toLocaleString()}
+                    ₱{latestPayslip.net_pay.toLocaleString()}
                   </span>
                 </div>
               </div>

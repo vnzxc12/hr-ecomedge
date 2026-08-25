@@ -73,7 +73,7 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
         }
 
         const overtimePay = overtimeHours * (effectiveHourlyRate * 1.5);
-        const allowances = 350.00; // Standard transport/meal allowance
+        const allowances = 1500.00; // Standard Philippine transport/meal allowance (PHP ₱1,500)
 
         const grossPay = basicPay + overtimePay + allowances;
         const taxDeduction = grossPay * 0.08; // 8% standard withholding

@@ -11,7 +11,6 @@ import {
   Eye,
   FileText,
   Building,
-  DollarSign,
   ArrowRight,
   X,
   CreditCard,
@@ -126,8 +125,8 @@ export default function Payroll() {
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
             {isManager
-              ? 'Automated salary computations from timesheets, tax deductions, and disbursements.'
-              : 'View itemized earnings, overtime compensations, and official payslips.'}
+              ? 'Automated salary computations from timesheets, overtime rates, and disbursements in Philippine Peso (₱).'
+              : 'View itemized earnings, overtime compensations, and official payslips in Philippine Peso (₱).'}
           </p>
         </div>
 
@@ -180,10 +179,10 @@ export default function Payroll() {
                       </td>
                       <td>{run.period_start} ~ {run.period_end}</td>
                       <td>{run.employee_count || 'All Active'} Staff</td>
-                      <td>${(run.total_gross || 0).toLocaleString()}</td>
-                      <td style={{ color: 'var(--danger)' }}>-${(run.total_deductions || 0).toLocaleString()}</td>
+                      <td>₱{(run.total_gross || 0).toLocaleString()}</td>
+                      <td style={{ color: 'var(--danger)' }}>-₱{(run.total_deductions || 0).toLocaleString()}</td>
                       <td style={{ fontWeight: '800', color: 'var(--success)' }}>
-                        ${(run.total_net || 0).toLocaleString()}
+                        ₱{(run.total_net || 0).toLocaleString()}
                       </td>
                       <td>
                         <span className={`badge badge-${run.status === 'paid' ? 'success' : (run.status === 'approved' ? 'info' : 'warning')}`}>
@@ -252,17 +251,17 @@ export default function Payroll() {
                       </td>
                       <td>{slip.period_start} ~ {slip.period_end}</td>
                       <td>{slip.total_hours_worked || 160} hrs</td>
-                      <td>${slip.basic_pay.toLocaleString()}</td>
+                      <td>₱{slip.basic_pay.toLocaleString()}</td>
                       <td style={{ color: slip.overtime_pay > 0 ? 'var(--success)' : 'inherit' }}>
-                        +${slip.overtime_pay.toLocaleString()}
+                        +₱{slip.overtime_pay.toLocaleString()}
                       </td>
-                      <td>+${slip.allowances.toLocaleString()}</td>
-                      <td style={{ fontWeight: '700' }}>${slip.gross_pay.toLocaleString()}</td>
+                      <td>+₱{slip.allowances.toLocaleString()}</td>
+                      <td style={{ fontWeight: '700' }}>₱{slip.gross_pay.toLocaleString()}</td>
                       <td style={{ color: 'var(--danger)' }}>
-                        -${(slip.tax_deduction + slip.social_deductions + slip.other_deductions).toLocaleString()}
+                        -₱{(slip.tax_deduction + slip.social_deductions + slip.other_deductions).toLocaleString()}
                       </td>
                       <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '0.95rem' }}>
-                        ${slip.net_pay.toLocaleString()}
+                        ₱{slip.net_pay.toLocaleString()}
                       </td>
                       <td>
                         <span className={`badge badge-${slip.payment_status === 'paid' ? 'success' : 'warning'}`}>
@@ -296,7 +295,7 @@ export default function Payroll() {
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Calculator size={20} color="var(--primary)" />
-                <h3>Generate Automated Payroll Batch</h3>
+                <h3>Generate Automated Payroll Batch (₱)</h3>
               </div>
               <button className="btn-icon" onClick={() => setShowGenerateModal(false)}>
                 <X size={18} />
@@ -306,7 +305,7 @@ export default function Payroll() {
             <form onSubmit={handleGeneratePayroll}>
               <div className="modal-body">
                 <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                  The engine will automatically scan all employee timesheets between the chosen period, compute regular hours, 1.5x overtime rates, allowances, and mandatory taxes.
+                  The engine will automatically scan all employee timesheets between the chosen period, compute regular hours, 1.5x overtime rates, allowances, and mandatory withholdings.
                 </p>
 
                 <div className="form-group">
@@ -372,7 +371,7 @@ export default function Payroll() {
                 <div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Net Disbursement Total</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--success)' }}>
-                    ${(selectedRun.total_net || 0).toLocaleString()}
+                    ₱{(selectedRun.total_net || 0).toLocaleString()}
                   </div>
                 </div>
 
@@ -410,14 +409,14 @@ export default function Payroll() {
                         <div style={{ fontWeight: '700' }}>{slip.first_name} {slip.last_name}</div>
                         <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{slip.employee_code} • {slip.department}</div>
                       </td>
-                      <td>${slip.basic_pay.toLocaleString()}</td>
-                      <td>+${slip.overtime_pay.toLocaleString()}</td>
-                      <td style={{ fontWeight: '700' }}>${slip.gross_pay.toLocaleString()}</td>
+                      <td>₱{slip.basic_pay.toLocaleString()}</td>
+                      <td>+₱{slip.overtime_pay.toLocaleString()}</td>
+                      <td style={{ fontWeight: '700' }}>₱{slip.gross_pay.toLocaleString()}</td>
                       <td style={{ color: 'var(--danger)' }}>
-                        -${(slip.tax_deduction + slip.social_deductions + slip.other_deductions).toLocaleString()}
+                        -₱{(slip.tax_deduction + slip.social_deductions + slip.other_deductions).toLocaleString()}
                       </td>
                       <td style={{ fontWeight: '800', color: 'var(--success)' }}>
-                        ${slip.net_pay.toLocaleString()}
+                        ₱{slip.net_pay.toLocaleString()}
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)}>
@@ -447,8 +446,8 @@ export default function Payroll() {
           <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ background: '#f3f4f6' }}>
             <div className="modal-header" style={{ background: '#ffffff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Printer size={20} color="#6366f1" />
-                <h3 style={{ color: '#111827' }}>Official Employee Payslip</h3>
+                <Printer size={20} color="#009640" />
+                <h3 style={{ color: '#0A1931' }}>Official Employee Payslip</h3>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button className="btn btn-primary btn-sm" onClick={handlePrint}>
@@ -467,28 +466,28 @@ export default function Payroll() {
                 {/* Header */}
                 <div className="payslip-header">
                   <div>
-                    <h2 style={{ fontSize: '1.4rem', color: '#1e1b4b', fontWeight: '800' }}>HR-ECOMEDGE ENTERPRISES</h2>
-                    <p style={{ fontSize: '0.8rem', color: '#6b7280' }}>
-                      Workforce Management & Payroll Operations
+                    <h2 style={{ fontSize: '1.4rem', color: '#0A1931', fontWeight: '900' }}>ECOMEDGE</h2>
+                    <p style={{ fontSize: '0.78rem', color: '#009640', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      Research and Analysis Services
                     </p>
-                    <p style={{ fontSize: '0.78rem', color: '#9ca3af' }}>
+                    <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.25rem' }}>
                       Payroll Code: <strong>{activePayslip.payroll_code}</strong>
                     </p>
                   </div>
 
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#111827' }}>PAYSLIP</div>
-                    <div style={{ fontSize: '0.8rem', color: '#4b5563' }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0A1931' }}>OFFICIAL PAYSLIP</div>
+                    <div style={{ fontSize: '0.8rem', color: '#475569' }}>
                       Period: {activePayslip.period_start} to {activePayslip.period_end}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: '#059669', fontWeight: '700', marginTop: '0.2rem' }}>
+                    <div style={{ fontSize: '0.8rem', color: '#009640', fontWeight: '700', marginTop: '0.2rem' }}>
                       Status: {activePayslip.payment_status?.toUpperCase()}
                     </div>
                   </div>
                 </div>
 
                 {/* Employee Information */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f9fafb', padding: '1rem', borderRadius: '6px', marginBottom: '1.5rem', border: '1px solid #e5e7eb', fontSize: '0.85rem' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '6px', marginBottom: '1.5rem', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}>
                   <div>
                     <div><strong>Employee Name:</strong> {activePayslip.first_name} {activePayslip.last_name}</div>
                     <div><strong>Employee Code:</strong> {activePayslip.employee_code}</div>
@@ -496,7 +495,7 @@ export default function Payroll() {
                   </div>
                   <div>
                     <div><strong>Job Title:</strong> {activePayslip.job_title}</div>
-                    <div><strong>Bank:</strong> {activePayslip.bank_name || 'Direct Deposit'}</div>
+                    <div><strong>Bank:</strong> {activePayslip.bank_name || 'BDO / Direct Deposit'}</div>
                     <div><strong>Account No:</strong> {activePayslip.bank_account_number || '**** 0000'}</div>
                   </div>
                 </div>
@@ -505,43 +504,43 @@ export default function Payroll() {
                 <div className="payslip-grid">
                   {/* Earnings Box */}
                   <div className="payslip-box">
-                    <h4>Earnings</h4>
+                    <h4>Earnings (PHP ₱)</h4>
                     <div className="payslip-line">
                       <span>Basic Pay ({activePayslip.total_hours_worked || 160} hrs)</span>
-                      <span>${activePayslip.basic_pay.toLocaleString()}</span>
+                      <span>₱{activePayslip.basic_pay.toLocaleString()}</span>
                     </div>
                     <div className="payslip-line">
                       <span>Overtime Pay ({activePayslip.overtime_hours || 0} hrs @ 1.5x)</span>
-                      <span>${activePayslip.overtime_pay.toLocaleString()}</span>
+                      <span>₱{activePayslip.overtime_pay.toLocaleString()}</span>
                     </div>
                     <div className="payslip-line">
                       <span>Meal & Transport Allowance</span>
-                      <span>${activePayslip.allowances.toLocaleString()}</span>
+                      <span>₱{activePayslip.allowances.toLocaleString()}</span>
                     </div>
                     <div className="payslip-line payslip-total">
                       <span>Gross Earnings</span>
-                      <span>${activePayslip.gross_pay.toLocaleString()}</span>
+                      <span>₱{activePayslip.gross_pay.toLocaleString()}</span>
                     </div>
                   </div>
 
                   {/* Deductions Box */}
                   <div className="payslip-box">
-                    <h4>Deductions</h4>
+                    <h4>Deductions (PHP ₱)</h4>
                     <div className="payslip-line">
-                      <span>Income Tax Withholding (8%)</span>
-                      <span>${activePayslip.tax_deduction.toLocaleString()}</span>
+                      <span>Withholding Tax (8%)</span>
+                      <span>₱{activePayslip.tax_deduction.toLocaleString()}</span>
                     </div>
                     <div className="payslip-line">
-                      <span>Social & Health Fund (4%)</span>
-                      <span>${activePayslip.social_deductions.toLocaleString()}</span>
+                      <span>SSS / PhilHealth / Pag-IBIG (4%)</span>
+                      <span>₱{activePayslip.social_deductions.toLocaleString()}</span>
                     </div>
                     <div className="payslip-line">
-                      <span>Other Withholdings</span>
-                      <span>${activePayslip.other_deductions.toLocaleString()}</span>
+                      <span>Other Deductions</span>
+                      <span>₱{activePayslip.other_deductions.toLocaleString()}</span>
                     </div>
                     <div className="payslip-line payslip-total" style={{ color: '#dc2626' }}>
                       <span>Total Deductions</span>
-                      <span>-${(activePayslip.tax_deduction + activePayslip.social_deductions + activePayslip.other_deductions).toLocaleString()}</span>
+                      <span>-₱{(activePayslip.tax_deduction + activePayslip.social_deductions + activePayslip.other_deductions).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -549,16 +548,16 @@ export default function Payroll() {
                 {/* Net Pay Banner */}
                 <div className="net-pay-banner">
                   <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '600' }}>NET TAKE-HOME PAY</div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.8 }}>Credited to employee bank account</div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>NET TAKE-HOME PAY</div>
+                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>Credited to Philippine Bank Account</div>
                   </div>
                   <div className="amount">
-                    ${activePayslip.net_pay.toLocaleString()}
+                    ₱{activePayslip.net_pay.toLocaleString()}
                   </div>
                 </div>
 
-                <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: '#9ca3af', borderTop: '1px solid #e5e7eb', paddingTop: '1rem' }}>
-                  This document is a system-generated payslip authorized by HR-EcomEdge Enterprise System.
+                <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
+                  This document is an official electronic payslip generated by ECOMEDGE Research and Analysis Services HR System.
                 </div>
               </div>
             </div>

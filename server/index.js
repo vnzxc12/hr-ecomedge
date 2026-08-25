@@ -69,8 +69,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 HR-EcomEdge Server running on http://localhost:${PORT}`);
-  console.log(`📊 DB Mode: ${isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local SQLite'}`);
-  console.log(`📁 Uploads available at http://localhost:${PORT}/uploads`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 HR-EcomEdge Server running on http://localhost:${PORT}`);
+    console.log(`📊 DB Mode: ${isSupabaseConfigured() ? 'Supabase PostgreSQL' : 'Local SQLite'}`);
+    console.log(`📁 Uploads available at http://localhost:${PORT}/uploads`);
+  });
+}
+
+module.exports = app;

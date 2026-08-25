@@ -8,8 +8,7 @@ import {
   Banknote,
   FolderLock,
   ArrowRight,
-  Moon,
-  Sparkles
+  Moon
 } from 'lucide-react';
 import EcomEdgeLogo from '../components/UI/EcomEdgeLogo';
 
@@ -39,12 +38,6 @@ export default function Login() {
     }
   };
 
-  const handleQuickDemo = (demoUser, demoPass) => {
-    setUsername(demoUser);
-    setPassword(demoPass);
-    setError('');
-  };
-
   return (
     <div style={{
       minHeight: '100vh',
@@ -57,7 +50,7 @@ export default function Login() {
     }}>
       <div style={{
         width: '100%',
-        maxWidth: '1050px',
+        maxWidth: '1000px',
         display: 'grid',
         gridTemplateColumns: '1.1fr 1fr',
         background: '#ffffff',
@@ -81,17 +74,17 @@ export default function Login() {
               <EcomEdgeLogo size={46} />
             </div>
 
-            {/* Poster Headline */}
+            {/* Headline */}
             <div style={{ marginBottom: '1.5rem' }}>
               <div style={{
                 fontFamily: 'var(--font-heading)',
-                fontSize: '2.4rem',
+                fontSize: '2.3rem',
                 fontWeight: '900',
-                lineHeight: '1',
+                lineHeight: '1.05',
                 color: 'var(--brand-navy)',
                 letterSpacing: '-0.02em'
               }}>
-                WE'RE <span style={{ color: 'var(--brand-green)' }}>OPERATING!</span>
+                HR & WORKFORCE <span style={{ color: 'var(--brand-green)' }}>PORTAL</span>
               </div>
               <div style={{
                 display: 'inline-flex',
@@ -99,15 +92,15 @@ export default function Login() {
                 gap: '0.4rem',
                 background: 'var(--brand-green)',
                 color: '#ffffff',
-                fontSize: '0.8rem',
+                fontSize: '0.78rem',
                 fontWeight: '800',
                 padding: '4px 12px',
                 borderRadius: 'var(--radius-full)',
-                marginTop: '0.6rem',
+                marginTop: '0.65rem',
                 textTransform: 'uppercase',
                 letterSpacing: '0.04em'
               }}>
-                HR & E-Commerce Management System
+                EcomEdge Management Suite
               </div>
             </div>
 
@@ -131,7 +124,7 @@ export default function Login() {
                   <Banknote size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Automated Payroll & Payslips</h4>
+                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Automated Payroll & Payslips (₱)</h4>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Instant earnings calculator and official printable itemized slips.</p>
                 </div>
               </div>
@@ -167,10 +160,10 @@ export default function Login() {
         </div>
 
         {/* Right Side: Login Form */}
-        <div style={{ padding: '3rem 2.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ marginBottom: '1.75rem' }}>
-            <h2 style={{ fontSize: '1.6rem', color: 'var(--brand-navy)', marginBottom: '0.35rem' }}>Sign In to Portal</h2>
-            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+        <div style={{ padding: '3.5rem 2.75rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+          <div style={{ marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.65rem', color: 'var(--brand-navy)', marginBottom: '0.35rem' }}>Account Sign In</h2>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
               Enter your assigned username and password to log in.
             </p>
           </div>
@@ -197,7 +190,7 @@ export default function Login() {
                   type="text"
                   className="form-control"
                   style={{ paddingLeft: '2.5rem' }}
-                  placeholder="e.g. admin or john.doe"
+                  placeholder="Enter username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   autoComplete="username"
@@ -235,52 +228,9 @@ export default function Login() {
             </button>
           </form>
 
-          {/* Quick Demo Access Chips */}
-          <div style={{ marginTop: '2rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-color)' }}>
-            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem' }}>
-              Demo Access Accounts
-            </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleQuickDemo('admin', 'admin123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
-              >
-                <span style={{ fontWeight: '800', color: 'var(--brand-navy)' }}>👑 Manager / Owner</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>admin / admin123</span>
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleQuickDemo('john.doe', 'password123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
-              >
-                <span style={{ fontWeight: '800', color: 'var(--brand-green)' }}>👤 Employee (Eng)</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>john.doe / password123</span>
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleQuickDemo('sarah.smith', 'password123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
-              >
-                <span style={{ fontWeight: '800', color: 'var(--brand-green)' }}>🎨 Employee (Design)</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>sarah.smith / password123</span>
-              </button>
-
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => handleQuickDemo('michael.lee', 'password123')}
-                style={{ textAlign: 'left', display: 'flex', flexDirection: 'column', alignItems: 'flex-start', padding: '0.55rem 0.75rem' }}
-              >
-                <span style={{ fontWeight: '800', color: 'var(--brand-navy)' }}>📢 Employee (Marketing)</span>
-                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>michael.lee / password123</span>
-              </button>
-            </div>
+          <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+            <ShieldCheck size={16} color="var(--brand-green)" style={{ verticalAlign: 'middle', marginRight: '4px' }} />
+            Encrypted Session • Username & Password Authentication
           </div>
         </div>
       </div>

@@ -7,6 +7,7 @@
     "server": "node server/index.js",
     "client": "npm --prefix client run dev",
     "build": "npm --prefix client run build",
+    "vercel-build": "npm --prefix client install && npm --prefix client run build",
     "seed": "node server/db/seed.js",
     "start": "node server/index.js"
   },

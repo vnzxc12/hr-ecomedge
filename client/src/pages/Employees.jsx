@@ -271,7 +271,7 @@ export default function Employees() {
                   {isManager && (
                     <td>
                       <div style={{ fontSize: '0.88rem', fontWeight: '700' }}>
-                        {emp.monthly_salary > 0 ? `$${emp.monthly_salary.toLocaleString()} / mo` : `$${emp.hourly_rate}/hr`}
+                        {emp.monthly_salary > 0 ? `₱${emp.monthly_salary.toLocaleString()} / mo` : `₱${emp.hourly_rate}/hr`}
                       </div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
                         {emp.employment_type === 'full_time' ? 'Full Time' : 'Contract/Part'}
@@ -504,21 +504,21 @@ export default function Employees() {
 
                 <div className="form-row">
                   <div className="form-group">
-                    <label className="form-label">Monthly Salary ($)</label>
+                    <label className="form-label">Monthly Salary (₱)</label>
                     <input
                       type="number"
                       className="form-control"
-                      placeholder="e.g. 6500"
+                      placeholder="e.g. 50000"
                       value={formData.monthly_salary}
                       onChange={(e) => setFormData({ ...formData, monthly_salary: e.target.value })}
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Hourly Rate ($)</label>
+                    <label className="form-label">Hourly Rate (₱)</label>
                     <input
                       type="number"
                       className="form-control"
-                      placeholder="e.g. 40"
+                      placeholder="e.g. 250"
                       value={formData.hourly_rate}
                       onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })}
                     />
@@ -642,8 +642,8 @@ export default function Employees() {
                     <div className="stat-card">
                       <div className="stat-info">
                         <div className="label">Monthly Salary</div>
-                        <div className="value">${(selectedEmp.monthly_salary || 0).toLocaleString()}</div>
-                        <div className="subtext">Hourly: ${selectedEmp.hourly_rate}/hr</div>
+                        <div className="value">₱{(selectedEmp.monthly_salary || 0).toLocaleString()}</div>
+                        <div className="subtext">Hourly: ₱{selectedEmp.hourly_rate}/hr</div>
                       </div>
                     </div>
                     <div className="stat-card emerald">

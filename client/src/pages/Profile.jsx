@@ -130,7 +130,7 @@ export default function Profile() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="+1 (555) 000-0000"
+                  placeholder="+63 900 000 0000"
                   value={profile.phone}
                   onChange={(e) => setProfile({ ...profile, phone: e.target.value })}
                 />
@@ -140,7 +140,7 @@ export default function Profile() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="Street, City, State"
+                  placeholder="e.g. Quezon City, Metro Manila"
                   value={profile.address}
                   onChange={(e) => setProfile({ ...profile, address: e.target.value })}
                 />
@@ -153,7 +153,7 @@ export default function Profile() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g. Jane Doe (Spouse)"
+                  placeholder="e.g. Maria Santos (Spouse)"
                   value={profile.emergency_contact_name}
                   onChange={(e) => setProfile({ ...profile, emergency_contact_name: e.target.value })}
                 />
@@ -163,7 +163,7 @@ export default function Profile() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="+1 (555) 999-9999"
+                  placeholder="+63 900 000 0000"
                   value={profile.emergency_contact_phone}
                   onChange={(e) => setProfile({ ...profile, emergency_contact_phone: e.target.value })}
                 />
@@ -171,7 +171,7 @@ export default function Profile() {
             </div>
 
             <h4 style={{ fontSize: '0.9rem', textTransform: 'uppercase', color: 'var(--text-muted)', margin: '1.5rem 0 1rem' }}>
-              Payroll & Direct Deposit
+              Payroll & Direct Deposit (Philippine Bank Account)
             </h4>
 
             <div className="form-row">
@@ -180,13 +180,13 @@ export default function Profile() {
                 <input
                   type="text"
                   className="form-control"
-                  placeholder="e.g. Chase Bank"
+                  placeholder="e.g. BDO, BPI, UnionBank, GCash"
                   value={profile.bank_name}
                   onChange={(e) => setProfile({ ...profile, bank_name: e.target.value })}
                 />
               </div>
               <div className="form-group">
-                <label className="form-label">Bank Account / IBAN</label>
+                <label className="form-label">Bank Account Number</label>
                 <input
                   type="text"
                   className="form-control"
