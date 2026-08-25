@@ -25,6 +25,7 @@ import {
   Check,
   Camera,
   Upload,
+  Image,
   Sliders
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
@@ -52,12 +53,15 @@ export default function Employees() {
   const [empDetails, setEmpDetails] = useState(null);
   const [activeDetailTab, setActiveDetailTab] = useState('overview');
 
-  // Photo upload
-  const drawerPhotoInputRef = useRef(null);
+  // Photo upload states
   const addModalPhotoInputRef = useRef(null);
+  const editModalPhotoInputRef = useRef(null);
+  const drawerPhotoInputRef = useRef(null);
+  const [addAvatarPreview, setAddAvatarPreview] = useState(null);
+  const [addAvatarFile, setAddAvatarFile] = useState(null);
+  const [editAvatarPreview, setEditAvatarPreview] = useState(null);
+  const [editAvatarFile, setEditAvatarFile] = useState(null);
   const [uploadingDrawerPhoto, setUploadingDrawerPhoto] = useState(false);
-  const [avatarPreview, setAvatarPreview] = useState(null);
-  const [avatarFile, setAvatarFile] = useState(null);
 
   // Add Employee Form
   const [formData, setFormData] = useState({
@@ -163,14 +167,31 @@ export default function Employees() {
       bank_name: emp.bank_name || 'BDO',
       bank_account_number: emp.bank_account_number || ''
     });
+    setEditAvatarFile(null);
+    setEditAvatarPreview(emp.avatar_url || null);
     setShowEditModal(true);
   };
 
   const handleAddModalPhotoSelect = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setAvatarFile(file);
-    setAvatarPreview(URL.createObjectURL(file));
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image size must be less than 10MB.', 'warning');
+      return;
+    }
+    setAddAvatarFile(file);
+    setAddAvatarPreview(URL.createObjectURL(file));
+  };
+
+  const handleEditModalPhotoSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      showToast('Image size must be less than 10MB.', 'warning');
+      return;
+    }
+    setEditAvatarFile(file);
+    setEditAvatarPreview(URL.createObjectURL(file));
   };
 
   const handleDrawerPhotoUpload = async (e) => {
@@ -207,10 +228,10 @@ export default function Employees() {
       showToast(res.message, 'success');
       confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 
-      if (avatarFile && res.employee?.id) {
+      if (addAvatarFile && res.employee?.id) {
         try {
           const fd = new FormData();
-          fd.append('avatar', avatarFile);
+          fd.append('avatar', addAvatarFile);
           await api.employees.uploadAvatar(res.employee.id, fd);
         } catch (err) {
           console.warn('Avatar upload skipped:', err.message);
@@ -229,8 +250,8 @@ export default function Employees() {
       }
 
       setShowAddModal(false);
-      setAvatarFile(null);
-      setAvatarPreview(null);
+      setAddAvatarFile(null);
+      setAddAvatarPreview(null);
       setFormData({
         first_name: '',
         last_name: '',
@@ -261,9 +282,23 @@ export default function Employees() {
     e.preventDefault();
     if (!selectedEmp) return;
     try {
-      const res = await api.employees.update(selectedEmp.id, editFormData);
+      await api.employees.update(selectedEmp.id, editFormData);
+
+      if (editAvatarFile) {
+        try {
+          const fd = new FormData();
+          fd.append('avatar', editAvatarFile);
+          await api.employees.uploadAvatar(selectedEmp.id, fd);
+        } catch (err) {
+          console.warn('Edit avatar upload error:', err.message);
+        }
+      }
+
       showToast('Employee information updated successfully!', 'success');
       setShowEditModal(false);
+      setEditAvatarFile(null);
+      setEditAvatarPreview(null);
+
       if (selectedEmp.id === empDetails?.employee?.id) {
         const refreshed = await api.employees.getById(selectedEmp.id);
         setEmpDetails(refreshed);
@@ -514,7 +549,7 @@ export default function Employees() {
       </div>
 
       {/* ==========================================
-          ADD EMPLOYEE MODAL
+          ADD EMPLOYEE MODAL (Scrollable & Clear Photo Upload)
           ========================================== */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
@@ -531,37 +566,24 @@ export default function Employees() {
 
             <form onSubmit={handleCreateEmployee}>
               <div className="modal-body">
-                {/* Photo & Basic Info Header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-color)' }}>
-                  <div style={{ position: 'relative' }}>
-                    <div className="user-avatar" style={{ width: '64px', height: '64px', fontSize: '1.5rem', overflow: 'hidden' }}>
-                      {avatarPreview ? (
-                        <img src={avatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      ) : (
-                        <Camera size={26} color="var(--text-muted)" />
-                      )}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => addModalPhotoInputRef.current?.click()}
-                      style={{
-                        position: 'absolute',
-                        bottom: '-4px',
-                        right: '-4px',
-                        width: '26px',
-                        height: '26px',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--brand-green)',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '2px solid #ffffff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Camera size={12} />
-                    </button>
+                {/* 🌟 1. PHOTO UPLOAD CARD (HIGH VISIBILITY) */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1.25rem',
+                  background: 'var(--bg-tertiary)',
+                  padding: '1.25rem',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '1.5rem',
+                  border: '1px solid var(--border-color)',
+                  flexWrap: 'wrap'
+                }}>
+                  <div className="user-avatar" style={{ width: '76px', height: '76px', fontSize: '1.8rem', overflow: 'hidden', flexShrink: 0, border: '2px solid var(--brand-green)' }}>
+                    {addAvatarPreview ? (
+                      <img src={addAvatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      <Camera size={30} color="var(--text-muted)" />
+                    )}
                   </div>
 
                   <input
@@ -572,22 +594,49 @@ export default function Employees() {
                     style={{ display: 'none' }}
                   />
 
-                  <div>
-                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Profile Photo (Optional)</h4>
-                    <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                      Click the camera icon to select a profile image for this employee.
+                  <div style={{ flex: 1, minWidth: '220px' }}>
+                    <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Image size={18} color="var(--brand-green)" /> Profile Picture (Photo)
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.65rem' }}>
+                      Upload a headshot or ID photo. Formats: JPG, PNG, WEBP (Max 10MB).
                     </p>
+
+                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => addModalPhotoInputRef.current?.click()}
+                      >
+                        <Upload size={14} />
+                        <span>{addAvatarPreview ? 'Change Photo' : 'Upload Employee Photo'}</span>
+                      </button>
+
+                      {addAvatarPreview && (
+                        <button
+                          type="button"
+                          className="btn btn-sm"
+                          style={{ background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)' }}
+                          onClick={() => {
+                            setAddAvatarFile(null);
+                            setAddAvatarPreview(null);
+                          }}
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                {/* 1. Account Credentials & Access Level */}
-                <div style={{ background: 'var(--primary-light)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-focus)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                {/* 🌟 2. ACCOUNT CREDENTIALS & ACCESS LEVEL */}
+                <div style={{ background: 'var(--primary-light)', padding: '1.1rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-focus)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
                     <ShieldCheck size={18} color="var(--primary)" />
-                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>1. Portal Login Credentials (Automatic Employee Access)</h4>
+                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Login Credentials (Automatic Employee Access)</h4>
                   </div>
                   <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
-                    ✨ If username or password are left empty, they will be <strong>auto-generated</strong> (e.g. <code>firstname.lastname</code> and <code>password123</code>) with standard employee access.
+                    ✨ If username or password are left empty, they will be <strong>auto-generated</strong> (e.g. <code>firstname.lastname</code> and <code>password123</code>) with employee self-service access.
                   </p>
 
                   <div className="form-row">
@@ -625,8 +674,8 @@ export default function Employees() {
                   </div>
                 </div>
 
-                {/* 2. Personal Information */}
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem' }}>2. Personal Details</h4>
+                {/* 🌟 3. PERSONAL DETAILS */}
+                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem', color: 'var(--text-primary)' }}>Personal Details</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">First Name *</label>
@@ -695,8 +744,8 @@ export default function Employees() {
                   </div>
                 </div>
 
-                {/* 3. Job & Compensation */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>3. Job Title & Compensation (PHP ₱)</h4>
+                {/* 🌟 4. JOB & COMPENSATION */}
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>Job Title & Compensation (PHP ₱)</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Job Title *</label>
@@ -770,8 +819,8 @@ export default function Employees() {
                   </div>
                 </div>
 
-                {/* 4. Bank Information */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>4. Banking & Direct Deposit</h4>
+                {/* 🌟 5. BANKING INFORMATION */}
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>Banking & Direct Deposit</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Bank Name</label>
@@ -810,7 +859,7 @@ export default function Employees() {
       )}
 
       {/* ==========================================
-          EDIT EMPLOYEE MODAL (Manager / Admin)
+          EDIT EMPLOYEE MODAL (Scrollable & Photo Upload/Edit)
           ========================================== */}
       {showEditModal && selectedEmp && (
         <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
@@ -827,8 +876,55 @@ export default function Employees() {
 
             <form onSubmit={handleUpdateEmployee}>
               <div className="modal-body">
-                {/* 1. Basic Details */}
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem' }}>1. Basic & Contact Information</h4>
+                {/* 🌟 1. PHOTO UPLOAD / CHANGE SECTION */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '1.25rem',
+                  background: 'var(--bg-tertiary)',
+                  padding: '1.25rem',
+                  borderRadius: 'var(--radius-md)',
+                  marginBottom: '1.5rem',
+                  border: '1px solid var(--border-color)',
+                  flexWrap: 'wrap'
+                }}>
+                  <div className="user-avatar" style={{ width: '76px', height: '76px', fontSize: '1.8rem', overflow: 'hidden', flexShrink: 0, border: '2px solid var(--brand-green)' }}>
+                    {editAvatarPreview ? (
+                      <img src={editAvatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    ) : (
+                      selectedEmp.first_name[0]
+                    )}
+                  </div>
+
+                  <input
+                    type="file"
+                    ref={editModalPhotoInputRef}
+                    onChange={handleEditModalPhotoSelect}
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                  />
+
+                  <div style={{ flex: 1, minWidth: '220px' }}>
+                    <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Image size={18} color="var(--brand-green)" /> Profile Picture (Photo)
+                    </h4>
+                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.65rem' }}>
+                      Update the photo for this employee record. Formats: JPG, PNG, WEBP.
+                    </p>
+
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => editModalPhotoInputRef.current?.click()}
+                    >
+                      <Upload size={14} />
+                      <span>{editAvatarPreview ? 'Change Photo' : 'Upload Employee Photo'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* 🌟 2. BASIC DETAILS */}
+                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem', color: 'var(--text-primary)' }}>1. Basic & Contact Information</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">First Name *</label>
@@ -891,8 +987,8 @@ export default function Employees() {
                   </div>
                 </div>
 
-                {/* 2. Position & Status */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>2. Role, Department & Status</h4>
+                {/* 🌟 3. POSITION & STATUS */}
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>2. Role, Department & Status</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Job Title *</label>
@@ -963,8 +1059,8 @@ export default function Employees() {
                   </div>
                 </div>
 
-                {/* 3. Banking Information */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem' }}>3. Banking & Direct Deposit</h4>
+                {/* 🌟 4. BANKING INFORMATION */}
+                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>3. Banking & Direct Deposit</h4>
                 <div className="form-row">
                   <div className="form-group">
                     <label className="form-label">Bank Name</label>
@@ -1130,7 +1226,7 @@ export default function Employees() {
             </div>
 
             {/* Detail Tabs */}
-            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
               <button
                 className={`btn btn-sm ${activeDetailTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`}
                 onClick={() => setActiveDetailTab('overview')}
