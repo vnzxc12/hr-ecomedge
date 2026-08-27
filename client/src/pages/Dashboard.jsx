@@ -462,32 +462,88 @@ export default function Dashboard({ onNavigate }) {
   // EMPLOYEE SELF-SERVICE (ESS) DASHBOARD
   // ==========================================
   const empM = data?.metrics || {};
+  const emp = data?.employee || {};
   const assignedPrjs = data?.assignedProjects || [];
   const assignedAssets = data?.assignedAssets || [];
   const recentLogs = data?.recentLogs || [];
   const recentTimesheets = data?.recentTimesheets || [];
 
+  const empAvatar = emp?.avatar_url || user?.avatar_url;
+  const empName = emp?.first_name 
+    ? `${emp.first_name} ${emp.last_name || ''}`.trim()
+    : (user?.first_name ? `${user.first_name} ${user.last_name || ''}`.trim() : (user?.username || 'Employee'));
+  const empJob = emp?.job_title || user?.job_title || 'Team Member';
+  const empDept = emp?.department || user?.department || 'Research & Analytics';
+  const empCode = emp?.employee_code || user?.employee_code || 'EMP';
+
   return (
     <div className="page-container">
-      {/* Employee Greeting Header */}
-      <div className="page-header-row">
-        <div>
-          <span className="badge badge-success" style={{ fontSize: '0.75rem', marginBottom: '0.4rem' }}>
-            ECOMEDGE RESEARCH WORKSPACE
-          </span>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 900, letterSpacing: '-0.02em' }}>
-            Welcome back, {user?.first_name || user?.username}!
-          </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem' }}>
-            {currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })} • {currentTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </p>
-        </div>
+      {/* Rich Employee Welcome Hero Banner */}
+      <div className="glass-card" style={{ 
+        padding: '1.75rem', 
+        marginBottom: '1.5rem', 
+        background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(240,253,244,0.85) 100%)',
+        border: '1px solid rgba(0, 150, 64, 0.2)',
+        boxShadow: 'var(--shadow-md)'
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+            {/* Circular Profile Picture with Active Ring */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div className="user-avatar" style={{ 
+                width: '76px', 
+                height: '76px', 
+                fontSize: '1.75rem', 
+                border: '3px solid var(--brand-green)',
+                boxShadow: '0 4px 12px rgba(0, 150, 64, 0.25)'
+              }}>
+                {empAvatar ? <img src={empAvatar} alt={empName} /> : (empName[0] || 'E')}
+              </div>
+              <div style={{
+                position: 'absolute',
+                bottom: '2px',
+                right: '2px',
+                width: '16px',
+                height: '16px',
+                borderRadius: '50%',
+                background: punchStatus === 'clocked_in' ? 'var(--brand-green)' : (punchStatus === 'on_break' ? '#f59e0b' : '#94a3b8'),
+                border: '2.5px solid #ffffff'
+              }} title={punchStatus === 'clocked_in' ? 'Working' : (punchStatus === 'on_break' ? 'On Break' : 'Clocked Out')} />
+            </div>
 
-        {/* Quick Punch Clock Hero Card */}
-        <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-          <button className="btn btn-primary" onClick={() => setShowPunchModal(true)}>
-            <Clock size={16} /> Open Punch Clock
-          </button>
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.25rem' }}>
+                <span className="badge badge-success" style={{ fontSize: '0.72rem', letterSpacing: '0.04em' }}>
+                  ECOMEDGE RESEARCH WORKSPACE
+                </span>
+                <span className="badge badge-neutral" style={{ fontSize: '0.72rem', fontFamily: 'var(--font-mono)' }}>
+                  {empCode}
+                </span>
+              </div>
+              <h1 style={{ fontSize: '1.75rem', fontWeight: 900, letterSpacing: '-0.02em', color: 'var(--brand-navy)', margin: 0 }}>
+                Welcome back, {empName}!
+              </h1>
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', margin: '0.25rem 0 0 0', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <strong>{empJob}</strong> • <span>{empDept}</span> • <span style={{ color: 'var(--text-muted)' }}>{currentTime.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}</span>
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Action Buttons */}
+          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowPunchModal(true)}>
+              <Clock size={15} /> Punch Clock
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('timesheets')}>
+              <FileCheck size={15} /> Submit Timesheet
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('leaves')}>
+              <CalendarDays size={15} /> Request Leave
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onNavigate('payroll')}>
+              <Banknote size={15} /> View Payslips
+            </button>
+          </div>
         </div>
       </div>
 
@@ -495,12 +551,12 @@ export default function Dashboard({ onNavigate }) {
       <div className="grid-kpi">
         <div className="stat-card emerald">
           <div className="stat-info">
-            <div className="label">TODAY STATUS</div>
-            <div className="value" style={{ fontSize: '1.4rem' }}>
-              {punchStatus === 'clocked_in' ? 'Working' : (punchStatus === 'on_break' ? 'On Break' : 'Clocked Out')}
+            <div className="label">TODAY SHIFT STATUS</div>
+            <div className="value" style={{ fontSize: '1.35rem' }}>
+              {punchStatus === 'clocked_in' ? '🟢 Working' : (punchStatus === 'on_break' ? '🟡 On Break' : '⚪ Clocked Out')}
             </div>
             <div className="subtext">
-              {todayPunch?.clock_in ? `In at ${new Date(todayPunch.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Not punched today'}
+              {todayPunch?.clock_in ? `Shift started at ${new Date(todayPunch.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Ready to clock in'}
             </div>
           </div>
           <div className="stat-icon emerald"><Clock size={20} /></div>
@@ -508,9 +564,9 @@ export default function Dashboard({ onNavigate }) {
 
         <div className="stat-card cyan">
           <div className="stat-info">
-            <div className="label">ASSIGNED PROJECTS</div>
+            <div className="label">ACTIVE PROJECTS</div>
             <div className="value">{empM.assignedProjectsCount || 0}</div>
-            <div className="subtext">Active client deliverables</div>
+            <div className="subtext">Assigned deliverables</div>
           </div>
           <div className="stat-icon cyan"><FolderKanban size={20} /></div>
         </div>
@@ -528,7 +584,7 @@ export default function Dashboard({ onNavigate }) {
           <div className="stat-info">
             <div className="label">ASSIGNED ASSETS</div>
             <div className="value">{empM.assignedAssetsCount || 0}</div>
-            <div className="subtext">Laptops &amp; Equipment</div>
+            <div className="subtext">Equipment &amp; Laptops</div>
           </div>
           <div className="stat-icon amber"><Laptop size={20} /></div>
         </div>
@@ -569,19 +625,23 @@ export default function Dashboard({ onNavigate }) {
             </button>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-            {recentLogs.slice(0, 4).map(l => (
-              <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
-                <div>
-                  <strong>{l.date}</strong>
-                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                    {l.clock_in ? new Date(l.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} – {l.clock_out ? new Date(l.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In progress'}
+            {recentLogs.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No attendance logs recorded yet.</div>
+            ) : (
+              recentLogs.slice(0, 4).map(l => (
+                <div key={l.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.6rem 0', borderBottom: '1px solid var(--border-color)', fontSize: '0.85rem' }}>
+                  <div>
+                    <strong>{l.date}</strong>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                      {l.clock_in ? new Date(l.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'} – {l.clock_out ? new Date(l.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In progress'}
+                    </div>
+                  </div>
+                  <div style={{ fontWeight: 800, color: 'var(--brand-green)' }}>
+                    {l.total_hours} hrs
                   </div>
                 </div>
-                <div style={{ fontWeight: 800, color: 'var(--brand-green)' }}>
-                  {l.total_hours} hrs
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>

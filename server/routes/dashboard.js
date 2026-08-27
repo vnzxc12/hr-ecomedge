@@ -121,6 +121,15 @@ router.get('/stats', authenticate, (req, res) => {
         });
       }
 
+      const employeeProfile = db.prepare(`
+        SELECT e.*, u.username, u.avatar_url, t.name as team_name, d.title as designation_title
+        FROM employees e
+        LEFT JOIN users u ON u.employee_id = e.id
+        LEFT JOIN teams t ON e.team_id = t.id
+        LEFT JOIN designations d ON e.designation_id = d.id
+        WHERE e.id = ?
+      `).get(employeeId);
+
       const todayLog = db.prepare(`
         SELECT * FROM time_logs
         WHERE employee_id = ? AND date = ?
@@ -171,6 +180,7 @@ router.get('/stats', authenticate, (req, res) => {
 
       return res.json({
         role: 'employee',
+        employee: employeeProfile || null,
         todayLog: todayLog || null,
         metrics: {
           assignedProjectsCount: assignedProjects.length,
