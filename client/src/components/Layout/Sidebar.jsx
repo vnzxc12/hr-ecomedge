@@ -3,17 +3,22 @@ import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
   Users,
+  Building2,
+  FolderKanban,
+  Award,
   Clock,
-  Banknote,
   CalendarDays,
   FolderLock,
   GraduationCap,
+  Banknote,
   Laptop,
-  UserCheck,
+  BarChart3,
+  Settings,
   Smartphone,
   LogOut,
   Zap,
-  X
+  X,
+  FileCheck
 } from 'lucide-react';
 
 import EcomEdgeLogo from '../UI/EcomEdgeLogo';
@@ -49,29 +54,78 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
     }
   };
 
-  const managerNavItems = [
-    { id: 'dashboard', label: 'Overview & Floor', icon: LayoutDashboard },
-    { id: 'employees', label: 'Employee Records', icon: Users },
-    { id: 'timelogs', label: 'Time & Attendance', icon: Clock },
-    { id: 'payroll', label: 'Payroll & Payslips', icon: Banknote },
-    { id: 'leaves', label: 'Leave Requests', icon: CalendarDays },
-    { id: 'documents', label: 'Document Vault', icon: FolderLock },
-    { id: 'training', label: 'Training Programs', icon: GraduationCap },
-    { id: 'assets', label: 'Asset Tracking', icon: Laptop },
+  const navSections = isManager ? [
+    {
+      title: 'Workforce',
+      items: [
+        { id: 'dashboard', label: 'Overview', icon: LayoutDashboard },
+        { id: 'employees', label: 'Employee Records', icon: Users },
+        { id: 'teams', label: 'Teams & Departments', icon: Building2 },
+      ]
+    },
+    {
+      title: 'Operations',
+      items: [
+        { id: 'projects', label: 'Clients & Projects', icon: FolderKanban },
+        { id: 'performance', label: 'Performance Reviews', icon: Award },
+      ]
+    },
+    {
+      title: 'Time & Attendance',
+      items: [
+        { id: 'timelogs', label: 'Attendance Logs', icon: Clock },
+        { id: 'timesheets', label: 'Project Timesheets', icon: FileCheck },
+      ]
+    },
+    {
+      title: 'HR',
+      items: [
+        { id: 'leaves', label: 'Leave Requests', icon: CalendarDays },
+        { id: 'documents', label: 'Document Vault', icon: FolderLock },
+        { id: 'training', label: 'Training & Certs', icon: GraduationCap },
+      ]
+    },
+    {
+      title: 'Payroll',
+      items: [
+        { id: 'payroll', label: 'Payroll & Payslips', icon: Banknote },
+      ]
+    },
+    {
+      title: 'Assets',
+      items: [
+        { id: 'assets', label: 'Asset Tracking', icon: Laptop },
+      ]
+    },
+    {
+      title: 'Reports & Admin',
+      items: [
+        { id: 'reports', label: 'Enterprise Reports', icon: BarChart3 },
+        { id: 'settings', label: 'Designations & Roles', icon: Settings },
+      ]
+    }
+  ] : [
+    {
+      title: 'My Workspace',
+      items: [
+        { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
+        { id: 'timelogs', label: 'My Attendance', icon: Clock },
+        { id: 'timesheets', label: 'My Timesheets', icon: FileCheck },
+        { id: 'leaves', label: 'My Leaves', icon: CalendarDays },
+        { id: 'payroll', label: 'My Payslips', icon: Banknote },
+      ]
+    },
+    {
+      title: 'Projects & Growth',
+      items: [
+        { id: 'projects', label: 'My Projects', icon: FolderKanban },
+        { id: 'training', label: 'Training & Courses', icon: GraduationCap },
+        { id: 'documents', label: 'My Documents', icon: FolderLock },
+        { id: 'assets', label: 'Assigned Assets', icon: Laptop },
+        { id: 'profile', label: 'My Profile & Security', icon: Users },
+      ]
+    }
   ];
-
-  const employeeNavItems = [
-    { id: 'dashboard', label: 'My Dashboard', icon: LayoutDashboard },
-    { id: 'timelogs', label: 'My Time Logs', icon: Clock },
-    { id: 'leaves', label: 'My Leaves', icon: CalendarDays },
-    { id: 'payroll', label: 'My Payslips', icon: Banknote },
-    { id: 'documents', label: 'My Documents', icon: FolderLock },
-    { id: 'training', label: 'Training & Courses', icon: GraduationCap },
-    { id: 'assets', label: 'Assigned Assets', icon: Laptop },
-    { id: 'profile', label: 'My Profile & Security', icon: UserCheck },
-  ];
-
-  const navItems = isManager ? managerNavItems : employeeNavItems;
 
   const displayName = user?.first_name
     ? `${user.first_name} ${user.last_name || ''}`.trim()
@@ -109,28 +163,30 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Navigation List */}
+        {/* Grouped Navigation List */}
         <nav className="sidebar-nav">
-          <div className="nav-section-title">
-            {isManager ? 'Workforce Management' : 'My Workspace'}
-          </div>
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                className={`nav-item ${isActive ? 'active' : ''}`}
-                onClick={() => {
-                  onSelectTab(item.id);
-                  if (onClose) onClose();
-                }}
-              >
-                <Icon size={18} />
-                <span>{item.label}</span>
-              </button>
-            );
-          })}
+          {navSections.map((sec, idx) => (
+            <div key={`sec-${idx}`} className="nav-group">
+              <div className="nav-section-title">{sec.title}</div>
+              {sec.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    className={`nav-item ${isActive ? 'active' : ''}`}
+                    onClick={() => {
+                      onSelectTab(item.id);
+                      if (onClose) onClose();
+                    }}
+                  >
+                    <Icon size={17} />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         {/* Footer Area: Install Web App + User Session Card + Sign Out Button */}

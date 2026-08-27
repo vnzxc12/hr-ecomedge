@@ -13,7 +13,7 @@ router.post('/upload', authenticate, upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'Please select a file to upload.' });
     }
 
-    const { title, category, employee_id } = req.body;
+    const { title, category, employee_id, expiration_date, status, notes } = req.body;
     const isManager = req.user.role === 'manager';
 
     // Target employee
@@ -27,12 +27,12 @@ router.post('/upload', authenticate, upload.single('file'), (req, res) => {
     }
 
     const docTitle = title ? title.trim() : req.file.originalname;
-    const docCategory = category || 'other';
+    const docCategory = category || 'employment';
     const filePath = `/uploads/${req.file.filename}`;
 
     const result = db.prepare(`
-      INSERT INTO documents (employee_id, title, category, file_name, file_path, file_size, mime_type, uploaded_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO documents (employee_id, title, category, file_name, file_path, file_size, mime_type, expiration_date, status, notes, uploaded_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       targetEmployeeId,
       docTitle,
@@ -41,6 +41,9 @@ router.post('/upload', authenticate, upload.single('file'), (req, res) => {
       filePath,
       req.file.size,
       req.file.mimetype,
+      expiration_date || null,
+      status || 'valid',
+      notes || '',
       req.user.id
     );
 

@@ -234,17 +234,169 @@ function initSchema() {
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (assigned_to) REFERENCES employees(id) ON DELETE SET NULL
     );
+
+    -- 12. Teams Table
+    CREATE TABLE IF NOT EXISTS teams (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      description TEXT,
+      department TEXT NOT NULL,
+      team_lead_id INTEGER,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (team_lead_id) REFERENCES employees(id) ON DELETE SET NULL
+    );
+
+    -- 13. Designations Table
+    CREATE TABLE IF NOT EXISTS designations (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT UNIQUE NOT NULL,
+      department TEXT NOT NULL,
+      level TEXT DEFAULT 'Mid-Level',
+      description TEXT,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 14. Clients Table
+    CREATE TABLE IF NOT EXISTS clients (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      code TEXT UNIQUE NOT NULL,
+      industry TEXT DEFAULT 'E-Commerce Research & Analytics',
+      contact_person TEXT,
+      email TEXT,
+      phone TEXT,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 15. Projects Table
+    CREATE TABLE IF NOT EXISTS projects (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      client_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      project_code TEXT UNIQUE NOT NULL,
+      description TEXT,
+      project_manager_id INTEGER,
+      team_id INTEGER,
+      start_date TEXT,
+      end_date TEXT,
+      status TEXT DEFAULT 'active',
+      priority TEXT DEFAULT 'high',
+      budget REAL DEFAULT 0.00,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_manager_id) REFERENCES employees(id) ON DELETE SET NULL,
+      FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL
+    );
+
+    -- 16. Project Assignments Table
+    CREATE TABLE IF NOT EXISTS project_assignments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_id INTEGER NOT NULL,
+      employee_id INTEGER NOT NULL,
+      role_on_project TEXT DEFAULT 'Research Analyst',
+      allocation_percent INTEGER DEFAULT 100,
+      start_date TEXT,
+      end_date TEXT,
+      status TEXT DEFAULT 'active',
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(project_id, employee_id),
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
+    );
+
+    -- 17. Timesheets Table
+    CREATE TABLE IF NOT EXISTS timesheets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL,
+      project_id INTEGER,
+      date TEXT NOT NULL,
+      start_time TEXT,
+      end_time TEXT,
+      break_mins INTEGER DEFAULT 0,
+      total_hours REAL DEFAULT 0.00,
+      overtime_hours REAL DEFAULT 0.00,
+      task_description TEXT NOT NULL,
+      status TEXT DEFAULT 'submitted',
+      reviewed_by INTEGER,
+      review_notes TEXT,
+      reviewed_at DATETIME,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+      FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE SET NULL,
+      FOREIGN KEY (reviewed_by) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    -- 18. Performance Reviews Table
+    CREATE TABLE IF NOT EXISTS performance_reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER NOT NULL,
+      reviewer_id INTEGER,
+      review_period TEXT NOT NULL,
+      rating REAL DEFAULT 5.0,
+      productivity_score REAL DEFAULT 5.0,
+      quality_score REAL DEFAULT 5.0,
+      accuracy_score REAL DEFAULT 5.0,
+      client_satisfaction REAL DEFAULT 5.0,
+      goals TEXT,
+      manager_comments TEXT,
+      employee_comments TEXT,
+      status TEXT DEFAULT 'completed',
+      review_date TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE,
+      FOREIGN KEY (reviewer_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    -- 19. Notifications Table
+    CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      title TEXT NOT NULL,
+      message TEXT NOT NULL,
+      type TEXT DEFAULT 'info',
+      link_tab TEXT,
+      is_read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    -- 20. Audit Logs Table
+    CREATE TABLE IF NOT EXISTS audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT,
+      action TEXT NOT NULL,
+      entity_type TEXT NOT NULL,
+      entity_id TEXT,
+      details TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 
-  try {
-    sqlite.exec('ALTER TABLE employees ADD COLUMN avatar_url TEXT');
-  } catch (e) {}
-  try {
-    sqlite.exec('ALTER TABLE users ADD COLUMN avatar_url TEXT');
-  } catch (e) {}
+  // Safe schema migrations
+  const migrations = [
+    'ALTER TABLE employees ADD COLUMN avatar_url TEXT',
+    'ALTER TABLE employees ADD COLUMN team_id INTEGER REFERENCES teams(id)',
+    'ALTER TABLE employees ADD COLUMN designation_id INTEGER REFERENCES designations(id)',
+    'ALTER TABLE employees ADD COLUMN manager_id INTEGER REFERENCES employees(id)',
+    'ALTER TABLE users ADD COLUMN avatar_url TEXT',
+    'ALTER TABLE documents ADD COLUMN expiration_date TEXT',
+    'ALTER TABLE documents ADD COLUMN status TEXT DEFAULT "valid"',
+    'ALTER TABLE documents ADD COLUMN notes TEXT'
+  ];
+
+  for (const query of migrations) {
+    try {
+      sqlite.exec(query);
+    } catch (e) {
+      // column already exists
+    }
+  }
 }
 
-// Seed clean initial accounts if database is empty
+// Seed clean initial accounts & EcomEdge demo data if database is empty
 function seedIfEmpty() {
   const userCount = sqlite.prepare('SELECT COUNT(*) as count FROM users').get().count;
   if (userCount > 0) return;
@@ -311,10 +463,9 @@ async function syncFromSupabase(force = false) {
     }
 
     sqlite.transaction(() => {
-      if (Array.isArray(employees)) {
-        sqlite.exec('DELETE FROM employees');
+      if (Array.isArray(employees) && employees.length > 0) {
         const insertEmp = sqlite.prepare(`
-          INSERT INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number, avatar_url)
+          INSERT OR REPLACE INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number, avatar_url)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const e of employees) {
@@ -341,10 +492,9 @@ async function syncFromSupabase(force = false) {
         }
       }
 
-      if (Array.isArray(users)) {
-        sqlite.exec('DELETE FROM users');
+      if (Array.isArray(users) && users.length > 0) {
         const insertUser = sqlite.prepare(`
-          INSERT INTO users (id, username, password_hash, role, employee_id, avatar_url)
+          INSERT OR REPLACE INTO users (id, username, password_hash, role, employee_id, avatar_url)
           VALUES (?, ?, ?, ?, ?, ?)
         `);
         for (const u of users) {
@@ -352,10 +502,9 @@ async function syncFromSupabase(force = false) {
         }
       }
 
-      if (Array.isArray(balances)) {
-        sqlite.exec('DELETE FROM leave_balances');
+      if (Array.isArray(balances) && balances.length > 0) {
         const insertBal = sqlite.prepare(`
-          INSERT INTO leave_balances (id, employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
+          INSERT OR REPLACE INTO leave_balances (id, employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const b of balances) {
@@ -363,10 +512,9 @@ async function syncFromSupabase(force = false) {
         }
       }
 
-      if (Array.isArray(leaves)) {
-        sqlite.exec('DELETE FROM leaves');
+      if (Array.isArray(leaves) && leaves.length > 0) {
         const insertLeave = sqlite.prepare(`
-          INSERT INTO leaves (id, employee_id, leave_type, start_date, end_date, days_count, reason, status, reviewed_by, review_notes)
+          INSERT OR REPLACE INTO leaves (id, employee_id, leave_type, start_date, end_date, days_count, reason, status, reviewed_by, review_notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const l of leaves) {
@@ -374,10 +522,9 @@ async function syncFromSupabase(force = false) {
         }
       }
 
-      if (Array.isArray(timeLogs)) {
-        sqlite.exec('DELETE FROM time_logs');
+      if (Array.isArray(timeLogs) && timeLogs.length > 0) {
         const insertLog = sqlite.prepare(`
-          INSERT INTO time_logs (id, employee_id, date, clock_in, break_start, break_end, clock_out, total_hours, break_duration_mins, overtime_hours, status, notes)
+          INSERT OR REPLACE INTO time_logs (id, employee_id, date, clock_in, break_start, break_end, clock_out, total_hours, break_duration_mins, overtime_hours, status, notes)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
         for (const t of timeLogs) {

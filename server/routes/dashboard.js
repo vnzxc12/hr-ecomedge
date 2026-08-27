@@ -11,18 +11,15 @@ router.get('/stats', authenticate, (req, res) => {
     const today = new Date().toISOString().split('T')[0];
 
     if (isManager) {
-      // 1. Manager Metrics
-      const totalEmployees = db.prepare("SELECT COUNT(*) as count FROM employees WHERE employment_status != 'terminated'").get().count;
-      const activeEmployees = db.prepare("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'active'").get().count;
-      
-      const pendingLeaves = db.prepare("SELECT COUNT(*) as count FROM leaves WHERE status = 'pending'").get().count;
-      
+      // 1. Manager & Executive Overview
+      const totalEmployees = db.prepare("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'active'").get().count;
+
       // Live Attendance status today
       const todayLogs = db.prepare(`
-        SELECT t.*, e.first_name, e.last_name, e.job_title, e.department, e.employee_code, u.avatar_url
+        SELECT t.*, e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.avatar_url, tm.name as team_name
         FROM time_logs t
         JOIN employees e ON t.employee_id = e.id
-        LEFT JOIN users u ON u.employee_id = e.id
+        LEFT JOIN teams tm ON e.team_id = tm.id
         WHERE t.date = ?
         ORDER BY t.clock_in DESC
       `).all(today);
@@ -31,51 +28,90 @@ router.get('/stats', authenticate, (req, res) => {
       const liveOnBreak = todayLogs.filter(l => l.status === 'on_break').length;
       const liveClockedOut = todayLogs.filter(l => l.status === 'clocked_out').length;
 
-      const totalAssets = db.prepare("SELECT COUNT(*) as count FROM assets").get().count;
-      const assignedAssets = db.prepare("SELECT COUNT(*) as count FROM assets WHERE status = 'assigned'").get().count;
+      // On leave today
+      const onLeaveToday = db.prepare(`
+        SELECT COUNT(*) as count FROM leaves
+        WHERE status = 'approved' AND ? BETWEEN start_date AND end_date
+      `).get(today).count;
 
-      const activeTrainings = db.prepare("SELECT COUNT(*) as count FROM training_programs WHERE status = 'in_progress' OR status = 'upcoming'").get().count;
+      // Active client projects
+      const activeProjectsCount = db.prepare("SELECT COUNT(*) as count FROM projects WHERE status = 'active'").get().count;
+      
+      const activeProjects = db.prepare(`
+        SELECT p.*, c.name as client_name, c.code as client_code, t.name as team_name,
+               pm.first_name as pm_first_name, pm.last_name as pm_last_name,
+               (SELECT COUNT(*) FROM project_assignments pa WHERE pa.project_id = p.id AND pa.status = 'active') as assigned_count
+        FROM projects p
+        LEFT JOIN clients c ON p.client_id = c.id
+        LEFT JOIN teams t ON p.team_id = t.id
+        LEFT JOIN employees pm ON p.project_manager_id = pm.id
+        WHERE p.status = 'active'
+        ORDER BY p.priority DESC, p.end_date ASC
+        LIMIT 6
+      `).all();
 
+      // Pending Approvals (Leaves + Timesheets)
+      const pendingLeaves = db.prepare("SELECT COUNT(*) as count FROM leaves WHERE status = 'pending'").get().count;
+      const pendingTimesheets = db.prepare("SELECT COUNT(*) as count FROM timesheets WHERE status = 'submitted'").get().count;
+      const pendingApprovalsCount = pendingLeaves + pendingTimesheets;
+
+      // Latest Payroll Run
       const latestPayroll = db.prepare("SELECT * FROM payrolls ORDER BY id DESC LIMIT 1").get();
 
-      // Recent Activity Log (leaves, docs, time)
+      // Team Workforce Distribution
+      const teamDistribution = db.prepare(`
+        SELECT t.id, t.name as team_name, t.department,
+               COUNT(e.id) as employee_count,
+               lead.first_name as lead_first_name, lead.last_name as lead_last_name
+        FROM teams t
+        LEFT JOIN employees e ON e.team_id = t.id AND e.employment_status = 'active'
+        LEFT JOIN employees lead ON t.team_lead_id = lead.id
+        GROUP BY t.id
+        ORDER BY employee_count DESC
+      `).all();
+
+      // Recent Activity Log (leaves, timesheets, docs)
       const recentLeaves = db.prepare(`
-        SELECT l.*, e.first_name, e.last_name
+        SELECT l.*, e.first_name, e.last_name, e.employee_code, e.avatar_url
         FROM leaves l
         JOIN employees e ON l.employee_id = e.id
         ORDER BY l.created_at DESC
-        LIMIT 4
+        LIMIT 5
       `).all();
 
-      const recentDocs = db.prepare(`
-        SELECT d.*, e.first_name, e.last_name
-        FROM documents d
-        JOIN employees e ON d.employee_id = e.id
-        ORDER BY d.uploaded_at DESC
-        LIMIT 4
+      const recentTimesheets = db.prepare(`
+        SELECT ts.*, e.first_name, e.last_name, e.employee_code, p.name as project_name
+        FROM timesheets ts
+        JOIN employees e ON ts.employee_id = e.id
+        LEFT JOIN projects p ON ts.project_id = p.id
+        ORDER BY ts.created_at DESC
+        LIMIT 5
       `).all();
 
       return res.json({
         role: 'manager',
         metrics: {
           totalEmployees,
-          activeEmployees,
-          pendingLeaves,
-          liveClockedIn,
+          currentlyWorking: liveClockedIn,
           liveOnBreak,
           liveClockedOut,
-          totalAssets,
-          assignedAssets,
-          activeTrainings,
-          latestPayrollTotal: latestPayroll ? latestPayroll.total_net : 0,
+          onLeaveToday,
+          activeProjectsCount,
+          pendingApprovalsCount,
+          pendingLeaves,
+          pendingTimesheets,
+          latestPayrollAmount: latestPayroll ? latestPayroll.total_net : 0,
+          latestPayrollPeriod: latestPayroll ? `${latestPayroll.period_start} – ${latestPayroll.period_end}` : 'Current Period',
           latestPayrollStatus: latestPayroll ? latestPayroll.status : 'None'
         },
+        teamDistribution,
+        activeProjects,
         liveAttendance: todayLogs,
         recentLeaves,
-        recentDocs
+        recentTimesheets
       });
     } else {
-      // 2. Employee Metrics
+      // 2. Employee Portal Overview
       if (!employeeId) {
         return res.json({
           role: 'employee',
@@ -96,6 +132,15 @@ router.get('/stats', authenticate, (req, res) => {
         WHERE employee_id = ? AND year = ?
       `).get(employeeId, new Date().getFullYear());
 
+      const assignedProjects = db.prepare(`
+        SELECT pa.*, p.name as project_name, p.project_code, p.status as project_status, p.priority,
+               c.name as client_name
+        FROM project_assignments pa
+        JOIN projects p ON pa.project_id = p.id
+        LEFT JOIN clients c ON p.client_id = c.id
+        WHERE pa.employee_id = ? AND pa.status = 'active'
+      `).all(employeeId);
+
       const assignedAssets = db.prepare(`
         SELECT * FROM assets
         WHERE assigned_to = ? AND status = 'assigned'
@@ -115,25 +160,20 @@ router.get('/stats', authenticate, (req, res) => {
         LIMIT 7
       `).all(employeeId);
 
-      const recentLeaves = db.prepare(`
-        SELECT * FROM leaves
-        WHERE employee_id = ?
-        ORDER BY created_at DESC
-        LIMIT 4
+      const recentTimesheets = db.prepare(`
+        SELECT ts.*, p.name as project_name
+        FROM timesheets ts
+        LEFT JOIN projects p ON ts.project_id = p.id
+        WHERE ts.employee_id = ?
+        ORDER BY ts.date DESC
+        LIMIT 5
       `).all(employeeId);
-
-      const latestPayslip = db.prepare(`
-        SELECT p.*, pr.period_start, pr.period_end, pr.payroll_code
-        FROM payslips p
-        JOIN payrolls pr ON p.payroll_id = pr.id
-        WHERE p.employee_id = ?
-        ORDER BY p.id DESC LIMIT 1
-      `).get(employeeId);
 
       return res.json({
         role: 'employee',
         todayLog: todayLog || null,
         metrics: {
+          assignedProjectsCount: assignedProjects.length,
           assignedAssetsCount: assignedAssets.length,
           enrolledTrainingsCount: enrolledTrainings.length,
           vacationRemaining: leaveBalance ? (leaveBalance.vacation_days - leaveBalance.vacation_used) : 0,
@@ -141,11 +181,11 @@ router.get('/stats', authenticate, (req, res) => {
           emergencyRemaining: leaveBalance ? (leaveBalance.emergency_days - leaveBalance.emergency_used) : 0
         },
         leaveBalance: leaveBalance || null,
+        assignedProjects,
         assignedAssets,
         enrolledTrainings,
         recentLogs,
-        recentLeaves,
-        latestPayslip: latestPayslip || null
+        recentTimesheets
       });
     }
   } catch (err) {

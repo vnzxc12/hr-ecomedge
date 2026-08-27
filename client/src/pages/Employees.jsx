@@ -1,79 +1,72 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import {
   Users,
-  UserPlus,
   Search,
-  Filter,
-  Eye,
-  Edit,
+  Plus,
+  Edit2,
   Trash2,
-  KeyRound,
-  ShieldCheck,
-  Building,
-  Phone,
-  MapPin,
-  Calendar,
-  Banknote,
+  FolderKanban,
   FolderLock,
+  FileText,
   Clock,
+  Banknote,
+  Award,
+  CalendarDays,
+  GraduationCap,
   Laptop,
   CheckCircle2,
-  X,
-  Copy,
-  Check,
-  Camera,
+  AlertTriangle,
+  Download,
   Upload,
-  Image,
-  Sliders
+  UserCheck,
+  Building2,
+  Mail,
+  Phone,
+  MapPin,
+  ArrowLeft,
+  X,
+  Eye
 } from 'lucide-react';
-import confetti from 'canvas-confetti';
 
 export default function Employees() {
-  const { isManager, showToast } = useAuth();
+  const { user, isManager, showToast } = useAuth();
   const [employees, setEmployees] = useState([]);
+  const [teams, setTeams] = useState([]);
+  const [designations, setDesignations] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Filters
   const [search, setSearch] = useState('');
-  const [department, setDepartment] = useState('');
-  const [status, setStatus] = useState('');
+  const [teamFilter, setTeamFilter] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('active');
+
+  // Single Employee Profile View State
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [profileData, setProfileData] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileTab, setProfileTab] = useState('overview'); // overview, attendance, payroll, documents, leave, projects, performance, training, assets
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showResetModal, setShowResetModal] = useState(false);
-  const [showCredentialsModal, setShowCredentialsModal] = useState(false);
-  const [showLeaveQuotaModal, setShowLeaveQuotaModal] = useState(false);
+  const [showDocUploadModal, setShowDocUploadModal] = useState(false);
 
-  const [createdCredentials, setCreatedCredentials] = useState(null);
-  const [copied, setCopied] = useState(false);
-
-  const [selectedEmp, setSelectedEmp] = useState(null);
-  const [empDetails, setEmpDetails] = useState(null);
-  const [activeDetailTab, setActiveDetailTab] = useState('overview');
-
-  // Photo upload states
-  const addModalPhotoInputRef = useRef(null);
-  const editModalPhotoInputRef = useRef(null);
-  const drawerPhotoInputRef = useRef(null);
-  const [addAvatarPreview, setAddAvatarPreview] = useState(null);
-  const [addAvatarFile, setAddAvatarFile] = useState(null);
-  const [editAvatarPreview, setEditAvatarPreview] = useState(null);
-  const [editAvatarFile, setEditAvatarFile] = useState(null);
-  const [uploadingDrawerPhoto, setUploadingDrawerPhoto] = useState(false);
-
-  // Add Employee Form
-  const [formData, setFormData] = useState({
+  // Forms
+  const [empForm, setEmpForm] = useState({
     first_name: '',
     last_name: '',
-    job_title: '',
-    department: 'Operations',
+    job_title: 'Research Analyst',
+    department: 'Research & Analytics',
+    team_id: '',
+    designation_id: '',
+    manager_id: '',
     employment_status: 'active',
     employment_type: 'full_time',
     hire_date: new Date().toISOString().split('T')[0],
-    hourly_rate: '',
-    monthly_salary: '',
+    hourly_rate: 187.50,
+    monthly_salary: 30000.00,
     phone: '',
     address: '',
     emergency_contact_name: '',
@@ -81,43 +74,32 @@ export default function Employees() {
     bank_name: 'BDO',
     bank_account_number: '',
     username: '',
-    password: '',
+    password: 'password123',
     role: 'employee'
   });
 
-  // Edit Employee Form
-  const [editFormData, setEditFormData] = useState({
-    first_name: '',
-    last_name: '',
-    job_title: '',
-    department: 'Operations',
-    employment_status: 'active',
-    employment_type: 'full_time',
-    hire_date: '',
-    hourly_rate: '',
-    monthly_salary: '',
-    phone: '',
-    address: '',
-    emergency_contact_name: '',
-    emergency_contact_phone: '',
-    bank_name: '',
-    bank_account_number: ''
+  const [docForm, setDocForm] = useState({
+    title: '',
+    category: 'employment',
+    expiration_date: '',
+    file: null
   });
 
-  // Leave Quota Form for Selected Employee
-  const [empQuotaForm, setEmpQuotaForm] = useState({
-    vacation_days: 0,
-    sick_days: 0,
-    emergency_days: 0
-  });
-
-  // Reset password form
-  const [newPassword, setNewPassword] = useState('');
+  useEffect(() => {
+    loadEmployees();
+    loadMeta();
+  }, [teamFilter, deptFilter, statusFilter]);
 
   const loadEmployees = async () => {
     setLoading(true);
     try {
-      const res = await api.employees.getAll({ search, department, status });
+      const params = {};
+      if (search) params.search = search;
+      if (teamFilter) params.team_id = teamFilter;
+      if (deptFilter) params.department = deptFilter;
+      if (statusFilter !== 'all') params.status = statusFilter;
+
+      const res = await api.employees.getAll(params);
       setEmployees(res.employees || []);
     } catch (err) {
       showToast(err.message, 'danger');
@@ -126,1437 +108,789 @@ export default function Employees() {
     }
   };
 
-  useEffect(() => {
-    loadEmployees();
-  }, [search, department, status]);
-
-  const handleOpenDetail = async (emp) => {
-    setSelectedEmp(emp);
-    setShowDetailModal(true);
+  const loadMeta = async () => {
     try {
-      const res = await api.employees.getById(emp.id);
-      setEmpDetails(res);
-      if (res.leaveBalance) {
-        setEmpQuotaForm({
-          vacation_days: res.leaveBalance.vacation_days || 0,
-          sick_days: res.leaveBalance.sick_days || 0,
-          emergency_days: res.leaveBalance.emergency_days || 0
-        });
-      }
+      const [teamRes, desigRes] = await Promise.all([
+        api.teams.getAll(),
+        api.teams.getDesignations()
+      ]);
+      setTeams(teamRes.teams || []);
+      setDesignations(desigRes.designations || []);
+    } catch (e) {}
+  };
+
+  const handleSelectEmployee = async (id) => {
+    setSelectedEmployeeId(id);
+    setProfileTab('overview');
+    setProfileLoading(true);
+    try {
+      const res = await api.employees.getById(id);
+      setProfileData(res);
     } catch (err) {
       showToast(err.message, 'danger');
-    }
-  };
-
-  const handleOpenEdit = (emp) => {
-    setSelectedEmp(emp);
-    setEditFormData({
-      first_name: emp.first_name || '',
-      last_name: emp.last_name || '',
-      job_title: emp.job_title || '',
-      department: emp.department || 'Operations',
-      employment_status: emp.employment_status || 'active',
-      employment_type: emp.employment_type || 'full_time',
-      hire_date: emp.hire_date || '',
-      hourly_rate: emp.hourly_rate || '',
-      monthly_salary: emp.monthly_salary || '',
-      phone: emp.phone || '',
-      address: emp.address || '',
-      emergency_contact_name: emp.emergency_contact_name || '',
-      emergency_contact_phone: emp.emergency_contact_phone || '',
-      bank_name: emp.bank_name || 'BDO',
-      bank_account_number: emp.bank_account_number || ''
-    });
-    setEditAvatarFile(null);
-    setEditAvatarPreview(emp.avatar_url || null);
-    setShowEditModal(true);
-  };
-
-  const handleAddModalPhotoSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('Image size must be less than 10MB.', 'warning');
-      return;
-    }
-    setAddAvatarFile(file);
-    setAddAvatarPreview(URL.createObjectURL(file));
-  };
-
-  const handleEditModalPhotoSelect = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 10 * 1024 * 1024) {
-      showToast('Image size must be less than 10MB.', 'warning');
-      return;
-    }
-    setEditAvatarFile(file);
-    setEditAvatarPreview(URL.createObjectURL(file));
-  };
-
-  const handleDrawerPhotoUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !selectedEmp) return;
-
-    const fd = new FormData();
-    fd.append('avatar', file);
-
-    setUploadingDrawerPhoto(true);
-    try {
-      const res = await api.employees.uploadAvatar(selectedEmp.id, fd);
-      showToast(res.message, 'success');
-      setSelectedEmp(prev => ({ ...prev, avatar_url: res.avatar_url }));
-      if (empDetails?.employee) {
-        setEmpDetails(prev => ({
-          ...prev,
-          employee: { ...prev.employee, avatar_url: res.avatar_url }
-        }));
-      }
-      loadEmployees();
-    } catch (err) {
-      showToast(err.message, 'danger');
+      setSelectedEmployeeId(null);
     } finally {
-      setUploadingDrawerPhoto(false);
+      setProfileLoading(false);
     }
   };
 
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     try {
-      const payload = { ...formData, avatar_url: addAvatarPreview || null };
-      const res = await api.employees.create(payload);
-      showToast(res.message, 'success');
-      confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-
-      if (addAvatarFile && res.employee?.id) {
-        try {
-          const fd = new FormData();
-          fd.append('avatar', addAvatarFile);
-          await api.employees.uploadAvatar(res.employee.id, fd);
-        } catch (err) {
-          console.warn('Avatar upload skipped:', err.message);
-        }
-      }
-
-      // Show generated credentials modal
-      if (res.credentials) {
-        setCreatedCredentials({
-          name: `${formData.first_name} ${formData.last_name}`,
-          username: res.credentials.username,
-          password: res.credentials.password,
-          role: res.credentials.role
-        });
-        setShowCredentialsModal(true);
-      }
-
+      await api.employees.create(empForm);
+      showToast('Employee created successfully!', 'success');
       setShowAddModal(false);
-      setAddAvatarFile(null);
-      setAddAvatarPreview(null);
-      setFormData({
-        first_name: '',
-        last_name: '',
-        job_title: '',
-        department: 'Operations',
-        employment_status: 'active',
-        employment_type: 'full_time',
-        hire_date: new Date().toISOString().split('T')[0],
-        hourly_rate: '',
-        monthly_salary: '',
-        phone: '',
-        address: '',
-        emergency_contact_name: '',
-        emergency_contact_phone: '',
-        bank_name: 'BDO',
-        bank_account_number: '',
-        username: '',
-        password: '',
-        role: 'employee'
-      });
       loadEmployees();
     } catch (err) {
       showToast(err.message, 'danger');
     }
   };
 
-  const handleUpdateEmployee = async (e) => {
+  const handleUploadDocument = async (e) => {
     e.preventDefault();
-    if (!selectedEmp) return;
-    try {
-      const payload = { ...editFormData, avatar_url: editAvatarPreview || selectedEmp.avatar_url || null };
-      await api.employees.update(selectedEmp.id, payload);
+    if (!docForm.file) {
+      return showToast('Please select a file to upload.', 'warning');
+    }
 
-      if (editAvatarFile) {
-        try {
-          const fd = new FormData();
-          fd.append('avatar', editAvatarFile);
-          await api.employees.uploadAvatar(selectedEmp.id, fd);
-        } catch (err) {
-          console.warn('Edit avatar upload error:', err.message);
-        }
+    try {
+      const formData = new FormData();
+      formData.append('file', docForm.file);
+      formData.append('title', docForm.title || docForm.file.name);
+      formData.append('category', docForm.category);
+      formData.append('employee_id', selectedEmployeeId);
+      if (docForm.expiration_date) {
+        formData.append('expiration_date', docForm.expiration_date);
       }
 
-      showToast('Employee information updated successfully!', 'success');
-      setShowEditModal(false);
-      setEditAvatarFile(null);
-      setEditAvatarPreview(null);
-
-      if (selectedEmp.id === empDetails?.employee?.id) {
-        const refreshed = await api.employees.getById(selectedEmp.id);
-        setEmpDetails(refreshed);
-        setSelectedEmp(refreshed.employee);
-      }
-      loadEmployees();
+      await api.documents.upload(formData);
+      showToast('Document uploaded successfully!', 'success');
+      setShowDocUploadModal(false);
+      setDocForm({ title: '', category: 'employment', expiration_date: '', file: null });
+      handleSelectEmployee(selectedEmployeeId);
     } catch (err) {
       showToast(err.message, 'danger');
     }
   };
 
-  const handleSaveEmpQuota = async (e) => {
-    e.preventDefault();
-    if (!selectedEmp) return;
-    try {
-      await api.leaves.updateBalance(selectedEmp.id, {
-        vacation_days: parseInt(empQuotaForm.vacation_days, 10) || 0,
-        sick_days: parseInt(empQuotaForm.sick_days, 10) || 0,
-        emergency_days: parseInt(empQuotaForm.emergency_days, 10) || 0
-      });
-      showToast('Leave quotas updated successfully!', 'success');
-      setShowLeaveQuotaModal(false);
-      const res = await api.employees.getById(selectedEmp.id);
-      setEmpDetails(res);
-    } catch (err) {
-      showToast(err.message, 'danger');
-    }
-  };
+  // ==========================================
+  // VIEW: SINGLE EMPLOYEE 9-TAB PROFILE
+  // ==========================================
+  if (selectedEmployeeId && profileData) {
+    const emp = profileData.employee;
+    const leave = profileData.leaveBalance;
+    const logs = profileData.recentLogs || [];
+    const docs = profileData.documents || [];
+    const prjs = profileData.projects || [];
+    const revs = profileData.performanceReviews || [];
+    const slips = profileData.payslips || [];
+    const assets = profileData.assets || [];
+    const trainings = profileData.trainings || [];
 
-  const handleResetPassword = async (e) => {
-    e.preventDefault();
-    if (!selectedEmp?.user_id) {
-      showToast('This employee does not have a user account linked.', 'warning');
-      return;
-    }
-    try {
-      const res = await api.auth.resetPassword(selectedEmp.user_id, newPassword);
-      showToast(res.message, 'success');
-      setShowResetModal(false);
-      setNewPassword('');
-    } catch (err) {
-      showToast(err.message, 'danger');
-    }
-  };
+    return (
+      <div className="page-container">
+        {/* Back Button */}
+        <button
+          className="btn btn-secondary btn-sm"
+          onClick={() => setSelectedEmployeeId(null)}
+          style={{ marginBottom: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+        >
+          <ArrowLeft size={15} /> Back to Employee Directory
+        </button>
 
-  const handleDeactivate = async (emp) => {
-    if (!window.confirm(`Are you sure you want to terminate/deactivate ${emp.first_name} ${emp.last_name}?`)) {
-      return;
-    }
-    try {
-      const res = await api.employees.delete(emp.id);
-      showToast(res.message, 'info');
-      loadEmployees();
-    } catch (err) {
-      showToast(err.message, 'danger');
-    }
-  };
+        {/* Rich Header Card */}
+        <div className="glass-card employee-header-card" style={{ marginBottom: '1.5rem', padding: '1.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
+            <div className="user-avatar" style={{ width: '76px', height: '76px', fontSize: '1.8rem', border: '3px solid var(--brand-green)' }}>
+              {emp.avatar_url ? <img src={emp.avatar_url} alt="Profile" /> : emp.first_name[0]}
+            </div>
 
-  const copyToClipboard = (text) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+            <div style={{ flex: 1, minWidth: '240px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+                <h1 style={{ fontSize: '1.65rem', fontWeight: 900, margin: 0, letterSpacing: '-0.02em' }}>
+                  {emp.first_name} {emp.last_name}
+                </h1>
+                <span className="badge badge-success" style={{ fontSize: '0.78rem' }}>
+                  {emp.employee_code}
+                </span>
+                <span className={`badge ${emp.employment_status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                  {emp.employment_status.toUpperCase()}
+                </span>
+              </div>
 
-  return (
-    <div className="page-container">
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div>
-          <h1 style={{ fontSize: '1.85rem', marginBottom: '0.25rem' }}>Employee Directory & Profiles</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem' }}>
-            Comprehensive workforce records, profile photos, edit information, credentials management, and departmental allocations.
-          </p>
+              <div style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--brand-green)', marginTop: '0.25rem' }}>
+                {emp.job_title} • {emp.team_name || emp.department}
+              </div>
+
+              <div style={{ display: 'flex', gap: '1.25rem', marginTop: '0.5rem', fontSize: '0.82rem', color: 'var(--text-secondary)', flexWrap: 'wrap' }}>
+                <span><Mail size={13} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> {emp.first_name.toLowerCase()}.{emp.last_name.toLowerCase()}@ecomedge.ph</span>
+                <span><Phone size={13} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> {emp.phone || 'No phone'}</span>
+                <span><UserCheck size={13} style={{ verticalAlign: 'middle', marginRight: '4px' }} /> Manager: <strong>{emp.manager_first_name ? `${emp.manager_first_name} ${emp.manager_last_name}` : 'Executive Director'}</strong></span>
+              </div>
+            </div>
+          </div>
         </div>
 
+        {/* 9-Tab Navigation */}
+        <div className="subtabs-bar" style={{ overflowX: 'auto', paddingBottom: '4px' }}>
+          {[
+            { id: 'overview', label: 'Overview', icon: Users },
+            { id: 'attendance', label: 'Attendance', icon: Clock },
+            { id: 'payroll', label: 'Payroll', icon: Banknote },
+            { id: 'documents', label: `Documents (${docs.length})`, icon: FolderLock },
+            { id: 'leave', label: 'Leave', icon: CalendarDays },
+            { id: 'projects', label: `Projects (${prjs.length})`, icon: FolderKanban },
+            { id: 'performance', label: `Performance (${revs.length})`, icon: Award },
+            { id: 'training', label: `Training (${trainings.length})`, icon: GraduationCap },
+            { id: 'assets', label: `Assets (${assets.length})`, icon: Laptop }
+          ].map(tab => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                className={`subtab-btn ${profileTab === tab.id ? 'active' : ''}`}
+                onClick={() => setProfileTab(tab.id)}
+              >
+                <Icon size={15} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* TAB 1: OVERVIEW */}
+        {profileTab === 'overview' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                Personal &amp; Contact Details
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.86rem' }}>
+                <div><span style={{ color: 'var(--text-muted)' }}>Full Name:</span> <strong>{emp.first_name} {emp.last_name}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Phone Number:</span> <strong>{emp.phone || 'N/A'}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Address:</span> <strong>{emp.address || 'N/A'}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Emergency Contact:</span> <strong>{emp.emergency_contact_name || 'N/A'} ({emp.emergency_contact_phone || 'N/A'})</strong></div>
+              </div>
+            </div>
+
+            <div className="glass-card">
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+                Employment &amp; Agency Role
+              </h3>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', fontSize: '0.86rem' }}>
+                <div><span style={{ color: 'var(--text-muted)' }}>Team:</span> <strong style={{ color: 'var(--brand-green)' }}>{emp.team_name || 'General'}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Department:</span> <strong>{emp.department}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Designation:</span> <strong>{emp.designation_title || emp.job_title}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Employment Type:</span> <strong style={{ textTransform: 'capitalize' }}>{emp.employment_type.replace('_', ' ')}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Hire Date:</span> <strong>{emp.hire_date}</strong></div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: ATTENDANCE */}
+        {profileTab === 'attendance' && (
+          <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Clock In</th>
+                    <th>Clock Out</th>
+                    <th>Total Hours</th>
+                    <th>Status</th>
+                    <th>Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {logs.map(l => (
+                    <tr key={l.id}>
+                      <td><strong>{l.date}</strong></td>
+                      <td>{l.clock_in ? new Date(l.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                      <td>{l.clock_out ? new Date(l.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In progress'}</td>
+                      <td><strong>{l.total_hours} hrs</strong></td>
+                      <td><span className="badge badge-success">{l.status}</span></td>
+                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{l.notes || '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: PAYROLL */}
+        {profileTab === 'payroll' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+            <div className="glass-card" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>BASIC SALARY</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--brand-green)' }}>₱{emp.monthly_salary?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>HOURLY RATE</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 900 }}>₱{emp.hourly_rate?.toFixed(2)}/hr</div>
+              </div>
+              <div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 700 }}>BANK ACCOUNT</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 800 }}>{emp.bank_name} - {emp.bank_account_number || 'N/A'}</div>
+              </div>
+            </div>
+
+            <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+              <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)', fontWeight: 800 }}>
+                Payslip History
+              </div>
+              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Period</th>
+                      <th>Gross Pay</th>
+                      <th>Deductions</th>
+                      <th>Net Pay</th>
+                      <th>Payment Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {slips.length === 0 ? (
+                      <tr><td colSpan={5} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No payslips issued yet.</td></tr>
+                    ) : (
+                      slips.map(s => (
+                        <tr key={s.id}>
+                          <td><strong>{s.period_start} – {s.period_end}</strong></td>
+                          <td>₱{s.gross_pay?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td>₱{(s.tax_deduction + s.social_deductions + s.other_deductions)?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</td>
+                          <td><strong style={{ color: 'var(--brand-green)' }}>₱{s.net_pay?.toLocaleString('en-US', { minimumFractionDigits: 2 })}</strong></td>
+                          <td><span className="badge badge-success">{s.payment_status || 'Paid'}</span></td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4: DOCUMENTS VAULT */}
+        {profileTab === 'documents' && (
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 800 }}>Document Vault &amp; Credentials</h3>
+              {isManager && (
+                <button className="btn btn-primary btn-sm" onClick={() => setShowDocUploadModal(true)}>
+                  <Upload size={14} /> Upload Document
+                </button>
+              )}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+              {docs.length === 0 ? (
+                <div className="glass-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                  No documents uploaded for this employee yet.
+                </div>
+              ) : (
+                docs.map(d => (
+                  <div key={d.id} className="glass-card" style={{ padding: '1.25rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
+                      <span className="badge badge-success" style={{ fontSize: '0.7rem', textTransform: 'uppercase' }}>
+                        {d.category}
+                      </span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.7rem' }}>
+                        {d.status || 'Valid'}
+                      </span>
+                    </div>
+
+                    <h4 style={{ fontSize: '0.98rem', fontWeight: 800, marginBottom: '0.35rem' }}>
+                      {d.title}
+                    </h4>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+                      {d.file_name} • {(d.file_size / 1024).toFixed(0)} KB
+                    </div>
+
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        {d.uploaded_at ? new Date(d.uploaded_at).toLocaleDateString() : ''}
+                      </span>
+                      <a
+                        href={d.file_path}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="btn btn-secondary btn-sm"
+                        style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                      >
+                        <Download size={13} /> View File
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: LEAVE */}
+        {profileTab === 'leave' && (
+          <div className="glass-card">
+            <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem' }}>Leave Balance &amp; Quotas ({new Date().getFullYear()})</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem' }}>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>VACATION LEAVE</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--brand-green)' }}>
+                  {leave ? (leave.vacation_days - leave.vacation_used) : 0} / {leave?.vacation_days || 0} Days
+                </div>
+              </div>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>SICK LEAVE</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--info)' }}>
+                  {leave ? (leave.sick_days - leave.sick_used) : 0} / {leave?.sick_days || 0} Days
+                </div>
+              </div>
+              <div style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>EMERGENCY LEAVE</div>
+                <div style={{ fontSize: '1.4rem', fontWeight: 900, color: 'var(--warning)' }}>
+                  {leave ? (leave.emergency_days - leave.emergency_used) : 0} / {leave?.emergency_days || 0} Days
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 6: PROJECTS */}
+        {profileTab === 'projects' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
+            {prjs.length === 0 ? (
+              <div className="glass-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                No active project assignments.
+              </div>
+            ) : (
+              prjs.map(p => (
+                <div key={p.id} className="glass-card">
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem', marginBottom: '0.5rem' }}>{p.client_name}</span>
+                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.35rem' }}>{p.project_name}</h4>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
+                    Role: <strong>{p.role_on_project}</strong> ({p.allocation_percent}% Allocation)
+                  </div>
+                  <span className="badge badge-neutral">{p.status}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 7: PERFORMANCE */}
+        {profileTab === 'performance' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {revs.length === 0 ? (
+              <div className="glass-card" style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                No performance reviews recorded yet.
+              </div>
+            ) : (
+              revs.map(r => (
+                <div key={r.id} className="glass-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <strong>{r.review_period}</strong>
+                    <span className="badge badge-success">Rating: {r.rating} / 5.0</span>
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{r.manager_comments}</p>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 8: TRAINING */}
+        {profileTab === 'training' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            {trainings.length === 0 ? (
+              <div className="glass-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                No training courses enrolled.
+              </div>
+            ) : (
+              trainings.map(t => (
+                <div key={t.id} className="glass-card">
+                  <h4 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.3rem' }}>{t.title}</h4>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Instructor: {t.instructor} • {t.duration_hours}h</div>
+                  <div style={{ marginTop: '0.75rem' }}><span className="badge badge-success">{t.completion_status}</span></div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* TAB 9: ASSETS */}
+        {profileTab === 'assets' && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1rem' }}>
+            {assets.length === 0 ? (
+              <div className="glass-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
+                No equipment assigned to this staff member.
+              </div>
+            ) : (
+              assets.map(a => (
+                <div key={a.id} className="glass-card">
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem' }}>
+                    <span className="badge badge-success">{a.category}</span>
+                    <span className="badge badge-neutral">{a.condition}</span>
+                  </div>
+                  <h4 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '0.2rem' }}>{a.name}</h4>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Tag: {a.asset_tag} • SN: {a.model_serial || 'N/A'}</div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* Upload Document Modal */}
+        {showDocUploadModal && (
+          <div className="modal-backdrop" onClick={() => setShowDocUploadModal(false)}>
+            <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+              <div className="modal-header">
+                <h3 style={{ margin: 0, fontWeight: 800 }}>Upload Employee Document</h3>
+              </div>
+              <form onSubmit={handleUploadDocument}>
+                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Document Title *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. Employment Contract 2026"
+                      value={docForm.title}
+                      onChange={(e) => setDocForm({ ...docForm, title: e.target.value })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Category</label>
+                      <select
+                        className="form-control"
+                        value={docForm.category}
+                        onChange={(e) => setDocForm({ ...docForm, category: e.target.value })}
+                      >
+                        <option value="employment">Employment Contract / NDA</option>
+                        <option value="id">Government / Company ID</option>
+                        <option value="cert">Certificate / Training</option>
+                        <option value="policy">Policy Acknowledgement</option>
+                        <option value="other">Other Documents</option>
+                      </select>
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Expiration Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={docForm.expiration_date}
+                        onChange={(e) => setDocForm({ ...docForm, expiration_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Select File (PDF, DOCX, PNG, JPG) *</label>
+                    <input
+                      type="file"
+                      className="form-control"
+                      onChange={(e) => setDocForm({ ...docForm, file: e.target.files[0] })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowDocUploadModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">Upload Document</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ==========================================
+  // VIEW: EMPLOYEE DIRECTORY & RECORDS
+  // ==========================================
+  return (
+    <div className="page-container">
+      {/* Page Header */}
+      <div className="page-header-row">
+        <div>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 900, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            <Users size={26} color="var(--brand-green)" /> Workforce &amp; Employee Directory
+          </h1>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
+            Browse EcomEdge research staff, view 9-tab employee dossiers, and manage hiring records.
+          </p>
+        </div>
         {isManager && (
           <button className="btn btn-primary" onClick={() => setShowAddModal(true)}>
-            <UserPlus size={18} />
-            <span>Add New Employee</span>
+            <Plus size={16} /> Add Employee
           </button>
         )}
       </div>
 
-      {/* Filter & Search Bar */}
-      <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1.25rem' }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr', gap: '1rem' }}>
-          <div style={{ position: 'relative' }}>
-            <input
-              type="text"
-              className="form-control"
-              style={{ paddingLeft: '2.5rem' }}
-              placeholder="Search by name, employee code, job title, department..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-            <Search size={18} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '12px' }} />
-          </div>
-
-          <div>
-            <select className="form-control" value={department} onChange={(e) => setDepartment(e.target.value)}>
-              <option value="">All Departments</option>
-              <option value="Engineering">Engineering</option>
-              <option value="Design & Product">Design & Product</option>
-              <option value="Marketing">Marketing</option>
-              <option value="Operations">Operations</option>
-              <option value="Human Resources">Human Resources</option>
-            </select>
-          </div>
-
-          <div>
-            <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All Statuses</option>
-              <option value="active">Active</option>
-              <option value="probationary">Probationary</option>
-              <option value="resigned">Resigned</option>
-              <option value="terminated">Terminated</option>
-            </select>
-          </div>
+      {/* Filter and Search Toolbar */}
+      <div className="glass-card" style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+        <div style={{ position: 'relative', flex: '1 1 240px' }}>
+          <Search size={16} color="var(--text-muted)" style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            type="text"
+            className="form-control"
+            style={{ paddingLeft: '2.4rem' }}
+            placeholder="Search by name, ID, job title..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && loadEmployees()}
+          />
         </div>
+
+        <select
+          className="form-control"
+          style={{ width: 'auto', minWidth: '180px' }}
+          value={teamFilter}
+          onChange={(e) => setTeamFilter(e.target.value)}
+        >
+          <option value="">All Teams</option>
+          {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+        </select>
+
+        <select
+          className="form-control"
+          style={{ width: 'auto', minWidth: '180px' }}
+          value={deptFilter}
+          onChange={(e) => setDeptFilter(e.target.value)}
+        >
+          <option value="">All Departments</option>
+          <option value="Research & Analytics">Research &amp; Analytics</option>
+          <option value="Operations">Operations</option>
+          <option value="Client Services">Client Services</option>
+          <option value="Management">Management</option>
+        </select>
+
+        <select
+          className="form-control"
+          style={{ width: 'auto', minWidth: '140px' }}
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          <option value="active">Active Only</option>
+          <option value="all">All Statuses</option>
+          <option value="terminated">Terminated</option>
+        </select>
       </div>
 
-      {/* Employees Table */}
-      <div className="table-container">
-        <table className="table">
-          <thead>
-            <tr>
-              <th>Employee</th>
-              <th>Department</th>
-              <th>Job Title</th>
-              <th>Status</th>
-              {isManager && <th>Compensation</th>}
-              <th>Account (Login)</th>
-              <th style={{ textAlign: 'right' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
-                  Loading employee records...
-                </td>
-              </tr>
-            ) : employees.length === 0 ? (
-              <tr>
-                <td colSpan="7" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
-                  No employees matching current filter.
-                </td>
-              </tr>
-            ) : (
-              employees.map((emp) => (
-                <tr key={emp.id}>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                      <div className="user-avatar" style={{ overflow: 'hidden' }}>
-                        {emp.avatar_url ? (
-                          <img src={emp.avatar_url} alt={emp.first_name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        ) : (
-                          emp.first_name[0]
-                        )}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight: '700', fontSize: '0.92rem' }}>
-                          {emp.first_name} {emp.last_name}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                          {emp.employee_code} • Hired {emp.hire_date}
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                  <td>{emp.department}</td>
-                  <td>{emp.job_title}</td>
-                  <td>
-                    <span className={`badge badge-${emp.employment_status === 'active' ? 'success' : (emp.employment_status === 'probationary' ? 'warning' : 'danger')}`}>
-                      {emp.employment_status}
-                    </span>
-                  </td>
-                  {isManager && (
+      {/* Employees Directory Table */}
+      <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading employee directory...</div>
+        ) : employees.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)' }}>
+            No employee records found matching your filters.
+          </div>
+        ) : (
+          <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>ID Code</th>
+                  <th>Position</th>
+                  <th>Team / Department</th>
+                  <th>Manager</th>
+                  <th>Status</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employees.map(emp => (
+                  <tr key={emp.id} style={{ cursor: 'pointer' }} onClick={() => handleSelectEmployee(emp.id)}>
                     <td>
-                      <div style={{ fontSize: '0.88rem', fontWeight: '700' }}>
-                        {emp.monthly_salary > 0 ? `₱${emp.monthly_salary.toLocaleString()} / mo` : `₱${emp.hourly_rate}/hr`}
-                      </div>
-                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {emp.employment_type === 'full_time' ? 'Full Time' : 'Contract/Part'}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div className="user-avatar" style={{ width: '36px', height: '36px', fontSize: '0.85rem' }}>
+                          {emp.avatar_url ? <img src={emp.avatar_url} alt="Avatar" /> : emp.first_name[0]}
+                        </div>
+                        <div>
+                          <strong style={{ fontSize: '0.92rem' }}>{emp.first_name} {emp.last_name}</strong>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>@{emp.username || 'staff'}</div>
+                        </div>
                       </div>
                     </td>
-                  )}
-                  <td>
-                    {emp.username ? (
-                      <span className="badge badge-purple" style={{ fontFamily: 'monospace' }}>
-                        @{emp.username} ({emp.role})
+                    <td>
+                      <span className="badge badge-success">{emp.employee_code}</span>
+                    </td>
+                    <td style={{ fontWeight: 600 }}>{emp.job_title}</td>
+                    <td>
+                      <div><strong>{emp.team_name || 'General'}</strong></div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{emp.department}</div>
+                    </td>
+                    <td style={{ fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                      {emp.manager_first_name ? `${emp.manager_first_name} ${emp.manager_last_name}` : 'Executive Director'}
+                    </td>
+                    <td>
+                      <span className={`badge ${emp.employment_status === 'active' ? 'badge-success' : 'badge-danger'}`}>
+                        {emp.employment_status}
                       </span>
-                    ) : (
-                      <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No account</span>
-                    )}
-                  </td>
-                  <td style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '0.4rem', justifyContent: 'flex-end' }}>
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
                       <button
-                        className="btn-icon"
-                        title="View Full Profile"
-                        onClick={() => handleOpenDetail(emp)}
+                        className="btn btn-sm btn-secondary"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleSelectEmployee(emp.id);
+                        }}
                       >
-                        <Eye size={16} />
+                        <Eye size={13} /> View Profile
                       </button>
-
-                      {isManager && (
-                        <>
-                          <button
-                            className="btn-icon"
-                            title="Edit Employee Info"
-                            onClick={() => handleOpenEdit(emp)}
-                            style={{ color: 'var(--brand-green)' }}
-                          >
-                            <Edit size={16} />
-                          </button>
-
-                          <button
-                            className="btn-icon"
-                            title="Reset Password"
-                            onClick={() => {
-                              setSelectedEmp(emp);
-                              setShowResetModal(true);
-                            }}
-                          >
-                            <KeyRound size={16} color="var(--accent-purple)" />
-                          </button>
-
-                          {emp.employment_status !== 'terminated' && (
-                            <button
-                              className="btn-icon"
-                              title="Deactivate / Terminate"
-                              onClick={() => handleDeactivate(emp)}
-                              style={{ color: 'var(--danger)' }}
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* ==========================================
-          ADD EMPLOYEE MODAL (Scrollable & Clear Photo Upload)
-          ========================================== */}
+      {/* Add Employee Modal */}
       {showAddModal && (
         <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
           <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <UserPlus size={22} color="var(--primary)" />
-                <h3>Add New Employee</h3>
-              </div>
-              <button className="btn-icon" onClick={() => setShowAddModal(false)}>
-                <X size={18} />
-              </button>
+              <h3 style={{ margin: 0, fontWeight: 800 }}>Onboard New Employee</h3>
             </div>
-
             <form onSubmit={handleCreateEmployee}>
-              <div className="modal-body">
-                {/* 🌟 1. PHOTO UPLOAD CARD (HIGH VISIBILITY) */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1.25rem',
-                  background: 'var(--bg-tertiary)',
-                  padding: '1.25rem',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: '1.5rem',
-                  border: '1px solid var(--border-color)',
-                  flexWrap: 'wrap'
-                }}>
-                  <div className="user-avatar" style={{ width: '76px', height: '76px', fontSize: '1.8rem', overflow: 'hidden', flexShrink: 0, border: '2px solid var(--brand-green)' }}>
-                    {addAvatarPreview ? (
-                      <img src={addAvatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      <Camera size={30} color="var(--text-muted)" />
-                    )}
-                  </div>
-
-                  <input
-                    type="file"
-                    ref={addModalPhotoInputRef}
-                    onChange={handleAddModalPhotoSelect}
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                  />
-
-                  <div style={{ flex: 1, minWidth: '220px' }}>
-                    <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Image size={18} color="var(--brand-green)" /> Profile Picture (Photo)
-                    </h4>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.65rem' }}>
-                      Upload a headshot or ID photo. Formats: JPG, PNG, WEBP (Max 10MB).
-                    </p>
-
-                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                      <button
-                        type="button"
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => addModalPhotoInputRef.current?.click()}
-                      >
-                        <Upload size={14} />
-                        <span>{addAvatarPreview ? 'Change Photo' : 'Upload Employee Photo'}</span>
-                      </button>
-
-                      {addAvatarPreview && (
-                        <button
-                          type="button"
-                          className="btn btn-sm"
-                          style={{ background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)' }}
-                          onClick={() => {
-                            setAddAvatarFile(null);
-                            setAddAvatarPreview(null);
-                          }}
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* 🌟 2. ACCOUNT CREDENTIALS & ACCESS LEVEL */}
-                <div style={{ background: 'var(--primary-light)', padding: '1.1rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.5rem', border: '1px solid var(--border-focus)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                    <ShieldCheck size={18} color="var(--primary)" />
-                    <h4 style={{ fontSize: '0.95rem', color: 'var(--text-primary)' }}>Login Credentials (Automatic Employee Access)</h4>
-                  </div>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '0.85rem' }}>
-                    ✨ If username or password are left empty, they will be <strong>auto-generated</strong> (e.g. <code>firstname.lastname</code> and <code>password123</code>) with employee self-service access.
-                  </p>
-
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label className="form-label">Username (Optional - Auto generated)</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Leave blank to auto-generate"
-                        value={formData.username}
-                        onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Initial Password (Optional)</label>
-                      <input
-                        type="text"
-                        className="form-control"
-                        placeholder="Default: password123"
-                        value={formData.password}
-                        onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Account Role</label>
-                      <select
-                        className="form-control"
-                        value={formData.role}
-                        onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      >
-                        <option value="employee">👤 Employee (Self-Service Access)</option>
-                        <option value="manager">👑 Manager / Owner (Full Access)</option>
-                      </select>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 🌟 3. PERSONAL DETAILS */}
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem', color: 'var(--text-primary)' }}>Personal Details</h4>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-row">
-                  <div className="form-group">
+                  <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">First Name *</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Alex"
-                      value={formData.first_name}
-                      onChange={(e) => setFormData({ ...formData, first_name: e.target.value })}
+                      value={empForm.first_name}
+                      onChange={(e) => setEmpForm({ ...empForm, first_name: e.target.value })}
                       required
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Last Name *</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Turner"
-                      value={formData.last_name}
-                      onChange={(e) => setFormData({ ...formData, last_name: e.target.value })}
+                      value={empForm.last_name}
+                      onChange={(e) => setEmpForm({ ...empForm, last_name: e.target.value })}
                       required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Phone Number</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="+63 900 000 0000"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                     />
                   </div>
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Residential Address</label>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Job Title / Designation *</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. Makati City, Metro Manila"
-                      value={formData.address}
-                      onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Emergency Contact Name</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. Maria Turner (Spouse)"
-                      value={formData.emergency_contact_name}
-                      onChange={(e) => setFormData({ ...formData, emergency_contact_name: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Emergency Contact Phone</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="+63 900 000 0000"
-                      value={formData.emergency_contact_phone}
-                      onChange={(e) => setFormData({ ...formData, emergency_contact_phone: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* 🌟 4. JOB & COMPENSATION */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>Job Title & Compensation (PHP ₱)</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Job Title *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      placeholder="e.g. E-Commerce Analyst"
-                      value={formData.job_title}
-                      onChange={(e) => setFormData({ ...formData, job_title: e.target.value })}
+                      placeholder="e.g. Research Analyst"
+                      value={empForm.job_title}
+                      onChange={(e) => setEmpForm({ ...empForm, job_title: e.target.value })}
                       required
                     />
                   </div>
-                  <div className="form-group">
+                  <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Department *</label>
                     <select
                       className="form-control"
-                      value={formData.department}
-                      onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+                      value={empForm.department}
+                      onChange={(e) => setEmpForm({ ...empForm, department: e.target.value })}
+                      required
                     >
+                      <option value="Research & Analytics">Research &amp; Analytics</option>
                       <option value="Operations">Operations</option>
-                      <option value="Engineering">Engineering</option>
-                      <option value="Design & Product">Design & Product</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Human Resources">Human Resources</option>
+                      <option value="Client Services">Client Services</option>
+                      <option value="Management">Management</option>
                     </select>
                   </div>
-                  <div className="form-group">
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Assigned Team</label>
+                    <select
+                      className="form-control"
+                      value={empForm.team_id}
+                      onChange={(e) => setEmpForm({ ...empForm, team_id: e.target.value })}
+                    >
+                      <option value="">-- Select Team --</option>
+                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Direct Manager</label>
+                    <select
+                      className="form-control"
+                      value={empForm.manager_id}
+                      onChange={(e) => setEmpForm({ ...empForm, manager_id: e.target.value })}
+                    >
+                      <option value="">-- Select Manager --</option>
+                      {employees.map(e => (
+                        <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Monthly Salary (PHP) *</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={empForm.monthly_salary}
+                      onChange={(e) => setEmpForm({ ...empForm, monthly_salary: parseFloat(e.target.value) || 0, hourly_rate: (parseFloat(e.target.value) || 0) / 160 })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Hire Date *</label>
                     <input
                       type="date"
                       className="form-control"
-                      value={formData.hire_date}
-                      onChange={(e) => setFormData({ ...formData, hire_date: e.target.value })}
+                      value={empForm.hire_date}
+                      onChange={(e) => setEmpForm({ ...empForm, hire_date: e.target.value })}
                       required
                     />
                   </div>
                 </div>
 
                 <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Monthly Salary (₱)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="e.g. 50000"
-                      value={formData.monthly_salary}
-                      onChange={(e) => setFormData({ ...formData, monthly_salary: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Hourly Rate (₱)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      placeholder="e.g. 250"
-                      value={formData.hourly_rate}
-                      onChange={(e) => setFormData({ ...formData, hourly_rate: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Employment Type</label>
-                    <select
-                      className="form-control"
-                      value={formData.employment_type}
-                      onChange={(e) => setFormData({ ...formData, employment_type: e.target.value })}
-                    >
-                      <option value="full_time">Full Time</option>
-                      <option value="part_time">Part Time</option>
-                      <option value="contract">Contract</option>
-                    </select>
-                  </div>
-                </div>
-
-                {/* 🌟 5. BANKING INFORMATION */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>Banking & Direct Deposit</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Bank Name</label>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Initial Username (Optional)</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="e.g. BDO, BPI, UnionBank, GCash"
-                      value={formData.bank_name}
-                      onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                      placeholder="Auto-generated if blank"
+                      value={empForm.username}
+                      onChange={(e) => setEmpForm({ ...empForm, username: e.target.value })}
                     />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Account Number</label>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Initial Password</label>
                     <input
                       type="text"
                       className="form-control"
-                      placeholder="**** 1234"
-                      value={formData.bank_account_number}
-                      onChange={(e) => setFormData({ ...formData, bank_account_number: e.target.value })}
+                      value={empForm.password}
+                      onChange={(e) => setEmpForm({ ...empForm, password: e.target.value })}
                     />
                   </div>
                 </div>
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Create Employee & Account
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          EDIT EMPLOYEE MODAL (Scrollable & Photo Upload/Edit)
-          ========================================== */}
-      {showEditModal && selectedEmp && (
-        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
-          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Edit size={22} color="var(--primary)" />
-                <h3>Edit Employee: {selectedEmp.first_name} {selectedEmp.last_name}</h3>
-              </div>
-              <button className="btn-icon" onClick={() => setShowEditModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleUpdateEmployee}>
-              <div className="modal-body">
-                {/* 🌟 1. PHOTO UPLOAD / CHANGE SECTION */}
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '1.25rem',
-                  background: 'var(--bg-tertiary)',
-                  padding: '1.25rem',
-                  borderRadius: 'var(--radius-md)',
-                  marginBottom: '1.5rem',
-                  border: '1px solid var(--border-color)',
-                  flexWrap: 'wrap'
-                }}>
-                  <div className="user-avatar" style={{ width: '76px', height: '76px', fontSize: '1.8rem', overflow: 'hidden', flexShrink: 0, border: '2px solid var(--brand-green)' }}>
-                    {editAvatarPreview ? (
-                      <img src={editAvatarPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      selectedEmp.first_name[0]
-                    )}
-                  </div>
-
-                  <input
-                    type="file"
-                    ref={editModalPhotoInputRef}
-                    onChange={handleEditModalPhotoSelect}
-                    accept="image/*"
-                    style={{ display: 'none' }}
-                  />
-
-                  <div style={{ flex: 1, minWidth: '220px' }}>
-                    <h4 style={{ fontSize: '1rem', color: 'var(--text-primary)', marginBottom: '0.25rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <Image size={18} color="var(--brand-green)" /> Profile Picture (Photo)
-                    </h4>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.65rem' }}>
-                      Update the photo for this employee record. Formats: JPG, PNG, WEBP.
-                    </p>
-
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => editModalPhotoInputRef.current?.click()}
-                    >
-                      <Upload size={14} />
-                      <span>{editAvatarPreview ? 'Change Photo' : 'Upload Employee Photo'}</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* 🌟 2. BASIC DETAILS */}
-                <h4 style={{ fontSize: '0.95rem', marginBottom: '0.85rem', color: 'var(--text-primary)' }}>1. Basic & Contact Information</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">First Name *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.first_name}
-                      onChange={(e) => setEditFormData({ ...editFormData, first_name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Last Name *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.last_name}
-                      onChange={(e) => setEditFormData({ ...editFormData, last_name: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Phone Number</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.phone}
-                      onChange={(e) => setEditFormData({ ...editFormData, phone: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Residential Address</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.address}
-                      onChange={(e) => setEditFormData({ ...editFormData, address: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Emergency Contact Name</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.emergency_contact_name}
-                      onChange={(e) => setEditFormData({ ...editFormData, emergency_contact_name: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Emergency Contact Phone</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.emergency_contact_phone}
-                      onChange={(e) => setEditFormData({ ...editFormData, emergency_contact_phone: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* 🌟 3. POSITION & STATUS */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>2. Role, Department & Status</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Job Title *</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.job_title}
-                      onChange={(e) => setEditFormData({ ...editFormData, job_title: e.target.value })}
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Department *</label>
-                    <select
-                      className="form-control"
-                      value={editFormData.department}
-                      onChange={(e) => setEditFormData({ ...editFormData, department: e.target.value })}
-                    >
-                      <option value="Operations">Operations</option>
-                      <option value="Engineering">Engineering</option>
-                      <option value="Design & Product">Design & Product</option>
-                      <option value="Marketing">Marketing</option>
-                      <option value="Human Resources">Human Resources</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Employment Status</label>
-                    <select
-                      className="form-control"
-                      value={editFormData.employment_status}
-                      onChange={(e) => setEditFormData({ ...editFormData, employment_status: e.target.value })}
-                    >
-                      <option value="active">Active</option>
-                      <option value="probationary">Probationary</option>
-                      <option value="resigned">Resigned</option>
-                      <option value="terminated">Terminated</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Hire Date</label>
-                    <input
-                      type="date"
-                      className="form-control"
-                      value={editFormData.hire_date}
-                      onChange={(e) => setEditFormData({ ...editFormData, hire_date: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Monthly Salary (₱)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={editFormData.monthly_salary}
-                      onChange={(e) => setEditFormData({ ...editFormData, monthly_salary: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Hourly Rate (₱)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={editFormData.hourly_rate}
-                      onChange={(e) => setEditFormData({ ...editFormData, hourly_rate: e.target.value })}
-                    />
-                  </div>
-                </div>
-
-                {/* 🌟 4. BANKING INFORMATION */}
-                <h4 style={{ fontSize: '0.95rem', margin: '1.25rem 0 0.85rem', color: 'var(--text-primary)' }}>3. Banking & Direct Deposit</h4>
-                <div className="form-row">
-                  <div className="form-group">
-                    <label className="form-label">Bank Name</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.bank_name}
-                      onChange={(e) => setEditFormData({ ...editFormData, bank_name: e.target.value })}
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Account Number</label>
-                    <input
-                      type="text"
-                      className="form-control"
-                      value={editFormData.bank_account_number}
-                      onChange={(e) => setEditFormData({ ...editFormData, bank_account_number: e.target.value })}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Changes
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          CREDENTIALS CONFIRMATION MODAL
-          ========================================== */}
-      {showCredentialsModal && createdCredentials && (
-        <div className="modal-backdrop" onClick={() => setShowCredentialsModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header" style={{ background: 'var(--brand-green-light)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <CheckCircle2 size={22} color="var(--brand-green)" />
-                <h3 style={{ color: 'var(--brand-navy)' }}>Employee Credentials Created!</h3>
-              </div>
-              <button className="btn-icon" onClick={() => setShowCredentialsModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                The login account for <strong>{createdCredentials.name}</strong> has been created with <strong>Employee Self-Service Access</strong>.
-              </p>
-
-              <div style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1.25rem', marginBottom: '1.25rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px dashed var(--border-color)', paddingBottom: '0.6rem' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Username</span>
-                  <strong style={{ fontFamily: 'monospace', fontSize: '1rem', color: 'var(--brand-navy)' }}>{createdCredentials.username}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', borderBottom: '1px dashed var(--border-color)', paddingBottom: '0.6rem' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Initial Password</span>
-                  <strong style={{ fontFamily: 'monospace', fontSize: '1rem', color: 'var(--brand-green)' }}>{createdCredentials.password}</strong>
-                </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Access Role</span>
-                  <span className="badge badge-success">{createdCredentials.role}</span>
-                </div>
-              </div>
-
-              <button
-                type="button"
-                className="btn btn-secondary"
-                style={{ width: '100%' }}
-                onClick={() => copyToClipboard(`Username: ${createdCredentials.username}\nPassword: ${createdCredentials.password}`)}
-              >
-                {copied ? <Check size={16} color="var(--brand-green)" /> : <Copy size={16} />}
-                <span>{copied ? 'Copied to Clipboard!' : 'Copy Login Credentials'}</span>
-              </button>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn btn-primary" onClick={() => setShowCredentialsModal(false)}>
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          EMPLOYEE DETAILS DRAWER MODAL
-          ========================================== */}
-      {showDetailModal && selectedEmp && (
-        <div className="modal-backdrop" onClick={() => setShowDetailModal(false)}>
-          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
-                <div style={{ position: 'relative' }}>
-                  <div className="user-avatar" style={{ width: '70px', height: '70px', fontSize: '1.75rem', overflow: 'hidden', border: '2px solid var(--brand-green)', boxShadow: '0 4px 12px var(--brand-green-glow)' }}>
-                    {selectedEmp.avatar_url ? (
-                      <img src={selectedEmp.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    ) : (
-                      selectedEmp.first_name[0]
-                    )}
-                  </div>
-                  {isManager && (
-                    <button
-                      type="button"
-                      onClick={() => drawerPhotoInputRef.current?.click()}
-                      title="Upload / Change Employee Photo"
-                      style={{
-                        position: 'absolute',
-                        bottom: '-4px',
-                        right: '-4px',
-                        width: '26px',
-                        height: '26px',
-                        borderRadius: 'var(--radius-full)',
-                        background: 'var(--brand-green)',
-                        color: '#ffffff',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: '2px solid #ffffff',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      <Camera size={13} />
-                    </button>
-                  )}
-                </div>
-
-                <input
-                  type="file"
-                  ref={drawerPhotoInputRef}
-                  onChange={handleDrawerPhotoUpload}
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                />
-
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <h3>{selectedEmp.first_name} {selectedEmp.last_name}</h3>
-                    {isManager && (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => handleOpenEdit(selectedEmp)}
-                        style={{ padding: '2px 8px', fontSize: '0.75rem' }}
-                      >
-                        <Edit size={12} /> Edit Info
-                      </button>
-                    )}
-                  </div>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    {selectedEmp.employee_code} • {selectedEmp.job_title} ({selectedEmp.department})
-                  </p>
-                </div>
-              </div>
-              <button className="btn-icon" onClick={() => setShowDetailModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Detail Tabs */}
-            <div style={{ display: 'flex', gap: '0.5rem', padding: '0.75rem 1.5rem', background: 'var(--bg-tertiary)', borderBottom: '1px solid var(--border-color)', flexShrink: 0 }}>
-              <button
-                className={`btn btn-sm ${activeDetailTab === 'overview' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDetailTab('overview')}
-              >
-                Overview
-              </button>
-              <button
-                className={`btn btn-sm ${activeDetailTab === 'timelogs' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDetailTab('timelogs')}
-              >
-                Time Logs ({empDetails?.recentLogs?.length || 0})
-              </button>
-              <button
-                className={`btn btn-sm ${activeDetailTab === 'leaves' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDetailTab('leaves')}
-              >
-                Leaves ({empDetails?.recentLeaves?.length || 0})
-              </button>
-              <button
-                className={`btn btn-sm ${activeDetailTab === 'documents' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDetailTab('documents')}
-              >
-                Documents ({empDetails?.documents?.length || 0})
-              </button>
-              <button
-                className={`btn btn-sm ${activeDetailTab === 'assets' ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setActiveDetailTab('assets')}
-              >
-                Assets ({empDetails?.assets?.length || 0})
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {activeDetailTab === 'overview' && (
-                <div>
-                  <div className="grid-kpi" style={{ marginBottom: '1.5rem' }}>
-                    <div className="stat-card">
-                      <div className="stat-info">
-                        <div className="label">Monthly Salary</div>
-                        <div className="value">₱{(selectedEmp.monthly_salary || 0).toLocaleString()}</div>
-                        <div className="subtext">Hourly: ₱{selectedEmp.hourly_rate}/hr</div>
-                      </div>
-                    </div>
-                    <div className="stat-card emerald">
-                      <div className="stat-info">
-                        <div className="label">Vacation Balance</div>
-                        <div className="value" style={{ color: 'var(--success)' }}>
-                          {empDetails?.leaveBalance ? (empDetails.leaveBalance.vacation_days - empDetails.leaveBalance.vacation_used) : 0} Days
-                        </div>
-                        <div className="subtext">Sick Days Left: {empDetails?.leaveBalance ? (empDetails.leaveBalance.sick_days - empDetails.leaveBalance.sick_used) : 0}</div>
-                      </div>
-                    </div>
-                    <div className="stat-card cyan">
-                      <div className="stat-info">
-                        <div className="label">Assigned Gear</div>
-                        <div className="value" style={{ color: 'var(--accent-cyan)' }}>{empDetails?.assets?.length || 0}</div>
-                        <div className="subtext">Hardware assets</div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.25rem' }}>
-                    <div style={{ background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: 'var(--radius-md)' }}>
-                      <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Contact & Personal</h4>
-                      <div style={{ fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div><strong>Phone:</strong> {selectedEmp.phone || 'Not provided'}</div>
-                        <div><strong>Address:</strong> {selectedEmp.address || 'Not provided'}</div>
-                        <div><strong>Emergency Contact:</strong> {selectedEmp.emergency_contact_name || 'N/A'} ({selectedEmp.emergency_contact_phone || 'N/A'})</div>
-                      </div>
-                    </div>
-
-                    <div style={{ background: 'var(--bg-tertiary)', padding: '1.25rem', borderRadius: 'var(--radius-md)' }}>
-                      <h4 style={{ fontSize: '0.85rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>Banking & Payroll</h4>
-                      <div style={{ fontSize: '0.88rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                        <div><strong>Bank Name:</strong> {selectedEmp.bank_name || 'Not configured'}</div>
-                        <div><strong>Account No:</strong> {selectedEmp.bank_account_number || 'Not configured'}</div>
-                        <div><strong>Hire Date:</strong> {selectedEmp.hire_date}</div>
-                        <div><strong>Type:</strong> {selectedEmp.employment_type}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {activeDetailTab === 'leaves' && (
-                <div>
-                  {isManager && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem' }}>
-                      <div>
-                        <div style={{ fontWeight: '700', fontSize: '0.9rem' }}>Annual Leave Quotas & Balances</div>
-                        <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                          Vacation: {empDetails?.leaveBalance?.vacation_days || 0}d (Used: {empDetails?.leaveBalance?.vacation_used || 0}d) • Sick: {empDetails?.leaveBalance?.sick_days || 0}d (Used: {empDetails?.leaveBalance?.sick_used || 0}d) • Emergency: {empDetails?.leaveBalance?.emergency_days || 0}d
-                        </div>
-                      </div>
-                      <button className="btn btn-secondary btn-sm" onClick={() => setShowLeaveQuotaModal(true)}>
-                        <Sliders size={14} /> Adjust Quotas
-                      </button>
-                    </div>
-                  )}
-
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Leave Type</th>
-                        <th>Dates</th>
-                        <th>Days</th>
-                        <th>Status</th>
-                        <th>Reason</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {empDetails?.recentLeaves?.length === 0 ? (
-                        <tr>
-                          <td colSpan="5" style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No leave requests recorded.</td>
-                        </tr>
-                      ) : (
-                        empDetails?.recentLeaves?.map((l) => (
-                          <tr key={l.id}>
-                            <td style={{ textTransform: 'capitalize', fontWeight: '700' }}>{l.leave_type}</td>
-                            <td>{l.start_date} ~ {l.end_date}</td>
-                            <td>{l.days_count} days</td>
-                            <td><span className={`badge badge-${l.status === 'approved' ? 'success' : (l.status === 'pending' ? 'warning' : 'danger')}`}>{l.status}</span></td>
-                            <td style={{ fontSize: '0.8rem' }}>"{l.reason}"</td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {activeDetailTab === 'timelogs' && (
-                <div>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Clock In</th>
-                        <th>Clock Out</th>
-                        <th>Break</th>
-                        <th>Hours</th>
-                        <th>Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {empDetails?.recentLogs?.map((log) => (
-                        <tr key={log.id}>
-                          <td>{log.date}</td>
-                          <td>{new Date(log.clock_in).toLocaleTimeString()}</td>
-                          <td>{log.clock_out ? new Date(log.clock_out).toLocaleTimeString() : '--:--'}</td>
-                          <td>{log.break_duration_mins || 0}m</td>
-                          <td>{log.total_hours} hrs</td>
-                          <td><span className="badge badge-neutral">{log.status}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {activeDetailTab === 'documents' && (
-                <div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-                    {empDetails?.documents?.map((doc) => (
-                      <div key={doc.id} style={{ background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '1rem' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                          <FolderLock size={18} color="var(--primary)" />
-                          <div style={{ fontWeight: '700', fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {doc.title}
-                          </div>
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                          Category: {doc.category}
-                        </div>
-                        <a href={doc.file_path} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm" style={{ width: '100%' }}>
-                          Download / View
-                        </a>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {activeDetailTab === 'assets' && (
-                <div>
-                  <table className="table">
-                    <thead>
-                      <tr>
-                        <th>Asset Tag</th>
-                        <th>Equipment Name</th>
-                        <th>Category</th>
-                        <th>Assigned Date</th>
-                        <th>Condition</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {empDetails?.assets?.map((ast) => (
-                        <tr key={ast.id}>
-                          <td style={{ fontWeight: '700' }}>{ast.asset_tag}</td>
-                          <td>{ast.name}</td>
-                          <td>{ast.category}</td>
-                          <td>{ast.assigned_date}</td>
-                          <td><span className="badge badge-success">{ast.condition}</span></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowDetailModal(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          SINGLE EMPLOYEE LEAVE QUOTA MODAL
-          ========================================== */}
-      {showLeaveQuotaModal && selectedEmp && (
-        <div className="modal-backdrop" onClick={() => setShowLeaveQuotaModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Sliders size={20} color="var(--primary)" />
-                <h3>Set Leave Quotas for {selectedEmp.first_name}</h3>
-              </div>
-              <button className="btn-icon" onClick={() => setShowLeaveQuotaModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleSaveEmpQuota}>
-              <div className="modal-body">
-                <div className="form-group">
-                  <label className="form-label">Vacation Days Allotted</label>
-                  <input
-                    type="number"
-                    min="0"
-                    className="form-control"
-                    value={empQuotaForm.vacation_days}
-                    onChange={(e) => setEmpQuotaForm({ ...empQuotaForm, vacation_days: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Sick Days Allotted</label>
-                  <input
-                    type="number"
-                    min="0"
-                    className="form-control"
-                    value={empQuotaForm.sick_days}
-                    onChange={(e) => setEmpQuotaForm({ ...empQuotaForm, sick_days: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Emergency Days Allotted</label>
-                  <input
-                    type="number"
-                    min="0"
-                    className="form-control"
-                    value={empQuotaForm.emergency_days}
-                    onChange={(e) => setEmpQuotaForm({ ...empQuotaForm, emergency_days: e.target.value })}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowLeaveQuotaModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Save Leave Quotas
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
-          RESET PASSWORD MODAL (Manager only)
-          ========================================== */}
-      {showResetModal && selectedEmp && (
-        <div className="modal-backdrop" onClick={() => setShowResetModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '460px' }}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <KeyRound size={20} color="var(--accent-purple)" />
-                <h3>Reset Password for @{selectedEmp.username}</h3>
-              </div>
-              <button className="btn-icon" onClick={() => setShowResetModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <form onSubmit={handleResetPassword}>
-              <div className="modal-body">
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
-                  Set a new password for employee <strong>{selectedEmp.first_name} {selectedEmp.last_name}</strong>.
-                </p>
-
-                <div className="form-group">
-                  <label className="form-label">New Password *</label>
-                  <input
-                    type="text"
-                    className="form-control"
-                    placeholder="Enter new password (min 6 chars)"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={6}
-                  />
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowResetModal(false)}>
-                  Cancel
-                </button>
-                <button type="submit" className="btn btn-primary">
-                  Update Password
-                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Create Employee</button>
               </div>
             </form>
           </div>

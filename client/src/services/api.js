@@ -219,5 +219,116 @@ export const api = {
     delete: (id) => request(`/assets/${id}`, {
       method: 'DELETE'
     })
+  },
+
+  // Teams & Departments
+  teams: {
+    getAll: () => request('/teams'),
+    getById: (id) => request(`/teams/${id}`),
+    create: (data) => request('/teams', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    update: (id, data) => request(`/teams/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    delete: (id) => request(`/teams/${id}`, {
+      method: 'DELETE'
+    }),
+    getDesignations: () => request('/teams/designations/list'),
+    createDesignation: (data) => request('/teams/designations/create', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    updateDesignation: (id, data) => request(`/teams/designations/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    deleteDesignation: (id) => request(`/teams/designations/${id}`, {
+      method: 'DELETE'
+    })
+  },
+
+  // Clients & Projects
+  projects: {
+    getAll: () => request('/projects'),
+    getById: (id) => request(`/projects/${id}`),
+    create: (data) => request('/projects', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    update: (id, data) => request(`/projects/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    delete: (id) => request(`/projects/${id}`, {
+      method: 'DELETE'
+    }),
+    assign: (data) => request('/projects/assign', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    removeAssignment: (id) => request(`/projects/assignment/${id}`, {
+      method: 'DELETE'
+    }),
+    getWorkload: () => request('/projects/workload/overview'),
+    getClients: () => request('/projects/clients/list'),
+    createClient: (data) => request('/projects/clients/create', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  },
+
+  // Timesheets
+  timesheets: {
+    getAll: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return request(`/timesheets${query ? `?${query}` : ''}`);
+    },
+    submit: (data) => request('/timesheets', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    review: (id, status, review_notes) => request(`/timesheets/${id}/review`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, review_notes })
+    }),
+    delete: (id) => request(`/timesheets/${id}`, {
+      method: 'DELETE'
+    })
+  },
+
+  // Performance Reviews
+  performance: {
+    getAll: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return request(`/performance${query ? `?${query}` : ''}`);
+    },
+    create: (data) => request('/performance', {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    delete: (id) => request(`/performance/${id}`, {
+      method: 'DELETE'
+    })
+  },
+
+  // Reports
+  reports: {
+    getSummary: () => request('/reports/summary')
+  },
+
+  // Notifications
+  notifications: {
+    getAll: () => request('/notifications'),
+    markAllRead: () => request('/notifications/read-all', {
+      method: 'PUT'
+    })
+  },
+
+  // Audit Logs
+  audit: {
+    getAll: () => request('/audit')
   }
 };

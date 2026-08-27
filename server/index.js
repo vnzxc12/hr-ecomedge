@@ -52,12 +52,19 @@ app.use(async (req, res, next) => {
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/employees', require('./routes/employees'));
+app.use('/api/teams', require('./routes/teams'));
+app.use('/api/projects', require('./routes/projects'));
+app.use('/api/timesheets', require('./routes/timesheets'));
 app.use('/api/timelogs', require('./routes/timelogs'));
+app.use('/api/performance', require('./routes/performance'));
 app.use('/api/leaves', require('./routes/leaves'));
 app.use('/api/payroll', require('./routes/payroll'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/training', require('./routes/training'));
 app.use('/api/assets', require('./routes/assets'));
+app.use('/api/reports', require('./routes/reports'));
+app.use('/api/notifications', require('./routes/notifications'));
+app.use('/api/audit', require('./routes/audit'));
 
 // Serve client static build in production
 const clientDist = path.join(__dirname, '..', 'client', 'dist');

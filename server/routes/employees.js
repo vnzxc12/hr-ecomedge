@@ -8,21 +8,27 @@ const { authenticate, requireManager, requireSelfOrManager } = require('../middl
 router.get('/', authenticate, (req, res) => {
   try {
     const isManager = req.user.role === 'manager';
-    const { search, department, status } = req.query;
+    const { search, department, status, team_id, designation_id } = req.query;
 
     let query = `
-      SELECT e.*, u.id as user_id, u.username, u.role, u.avatar_url
+      SELECT e.*, 
+             u.id as user_id, u.username, u.role, u.avatar_url,
+             t.name as team_name,
+             d.title as designation_title,
+             m.first_name as manager_first_name, m.last_name as manager_last_name
       FROM employees e
       LEFT JOIN users u ON u.employee_id = e.id
+      LEFT JOIN teams t ON e.team_id = t.id
+      LEFT JOIN designations d ON e.designation_id = d.id
+      LEFT JOIN employees m ON e.manager_id = m.id
       WHERE 1=1
     `;
     const params = [];
 
-    // If employee, they can only view list of colleagues (names/departments/job titles) or themselves
     if (search) {
-      query += ` AND (e.first_name LIKE ? OR e.last_name LIKE ? OR e.employee_code LIKE ? OR e.job_title LIKE ? OR e.department LIKE ?)`;
+      query += ` AND (e.first_name LIKE ? OR e.last_name LIKE ? OR e.employee_code LIKE ? OR e.job_title LIKE ? OR e.department LIKE ? OR t.name LIKE ?)`;
       const s = `%${search}%`;
-      params.push(s, s, s, s, s);
+      params.push(s, s, s, s, s, s);
     }
 
     if (department) {
@@ -35,10 +41,20 @@ router.get('/', authenticate, (req, res) => {
       params.push(status);
     }
 
+    if (team_id) {
+      query += ' AND e.team_id = ?';
+      params.push(team_id);
+    }
+
+    if (designation_id) {
+      query += ' AND e.designation_id = ?';
+      params.push(designation_id);
+    }
+
     query += ' ORDER BY e.id ASC';
     const employees = db.prepare(query).all(...params);
 
-    // Hide confidential financial info from non-managers
+    // Hide confidential financial info from non-managers viewing colleagues
     const sanitized = employees.map(emp => {
       if (!isManager && emp.id !== req.user.employee_id) {
         return {
@@ -48,6 +64,8 @@ router.get('/', authenticate, (req, res) => {
           last_name: emp.last_name,
           job_title: emp.job_title,
           department: emp.department,
+          team_name: emp.team_name,
+          designation_title: emp.designation_title,
           employment_status: emp.employment_status,
           avatar_url: emp.avatar_url
         };
@@ -62,7 +80,7 @@ router.get('/', authenticate, (req, res) => {
   }
 });
 
-// GET /api/employees/:id (Detailed single employee view)
+// GET /api/employees/:id (Detailed 9-Tab single employee view)
 router.get('/:id', authenticate, (req, res) => {
   try {
     const empId = parseInt(req.params.id, 10);
@@ -74,9 +92,16 @@ router.get('/:id', authenticate, (req, res) => {
     }
 
     const employee = db.prepare(`
-      SELECT e.*, u.id as user_id, u.username, u.role, u.avatar_url
+      SELECT e.*, 
+             u.id as user_id, u.username, u.role, u.avatar_url,
+             t.name as team_name,
+             d.title as designation_title,
+             m.first_name as manager_first_name, m.last_name as manager_last_name
       FROM employees e
       LEFT JOIN users u ON u.employee_id = e.id
+      LEFT JOIN teams t ON e.team_id = t.id
+      LEFT JOIN designations d ON e.designation_id = d.id
+      LEFT JOIN employees m ON e.manager_id = m.id
       WHERE e.id = ?
     `).get(empId);
 
@@ -86,15 +111,51 @@ router.get('/:id', authenticate, (req, res) => {
 
     const currentYear = new Date().getFullYear();
     const leaveBalance = db.prepare('SELECT * FROM leave_balances WHERE employee_id = ? AND year = ?').get(empId, currentYear);
-    const recentLogs = db.prepare('SELECT * FROM time_logs WHERE employee_id = ? ORDER BY date DESC, clock_in DESC LIMIT 10').all(empId);
-    const recentLeaves = db.prepare('SELECT * FROM leaves WHERE employee_id = ? ORDER BY created_at DESC LIMIT 10').all(empId);
+    const recentLogs = db.prepare('SELECT * FROM time_logs WHERE employee_id = ? ORDER BY date DESC, clock_in DESC LIMIT 15').all(empId);
+    const recentLeaves = db.prepare('SELECT * FROM leaves WHERE employee_id = ? ORDER BY created_at DESC').all(empId);
     const documents = db.prepare('SELECT * FROM documents WHERE employee_id = ? ORDER BY uploaded_at DESC').all(empId);
     const assets = db.prepare('SELECT * FROM assets WHERE assigned_to = ?').all(empId);
     const trainings = db.prepare(`
-      SELECT tr.*, tp.title, tp.instructor, tp.duration_hours
+      SELECT tr.*, tp.title, tp.instructor, tp.duration_hours, tp.status as program_status
       FROM training_records tr
       JOIN training_programs tp ON tr.training_id = tp.id
       WHERE tr.employee_id = ?
+    `).all(empId);
+
+    const projects = db.prepare(`
+      SELECT pa.*, p.name as project_name, p.project_code, p.status as project_status, p.priority,
+             c.name as client_name
+      FROM project_assignments pa
+      JOIN projects p ON pa.project_id = p.id
+      LEFT JOIN clients c ON p.client_id = c.id
+      WHERE pa.employee_id = ?
+      ORDER BY pa.status ASC, p.name ASC
+    `).all(empId);
+
+    const timesheets = db.prepare(`
+      SELECT ts.*, p.name as project_name
+      FROM timesheets ts
+      LEFT JOIN projects p ON ts.project_id = p.id
+      WHERE ts.employee_id = ?
+      ORDER BY ts.date DESC
+      LIMIT 15
+    `).all(empId);
+
+    const performanceReviews = db.prepare(`
+      SELECT pr.*, u.username as reviewer_username
+      FROM performance_reviews pr
+      LEFT JOIN users u ON pr.reviewer_id = u.id
+      WHERE pr.employee_id = ?
+      ORDER BY pr.review_date DESC
+    `).all(empId);
+
+    const payslips = db.prepare(`
+      SELECT p.*, pr.period_start, pr.period_end, pr.payroll_code, pr.payment_date
+      FROM payslips p
+      JOIN payrolls pr ON p.payroll_id = pr.id
+      WHERE p.employee_id = ?
+      ORDER BY pr.id DESC
+      LIMIT 12
     `).all(empId);
 
     res.json({
@@ -104,7 +165,11 @@ router.get('/:id', authenticate, (req, res) => {
       recentLeaves,
       documents,
       assets,
-      trainings
+      trainings,
+      projects,
+      timesheets,
+      performanceReviews,
+      payslips
     });
   } catch (err) {
     console.error('Get employee detail error:', err);

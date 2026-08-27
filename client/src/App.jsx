@@ -8,12 +8,18 @@ import Toast from './components/UI/Toast';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import Employees from './pages/Employees';
+import Teams from './pages/Teams';
+import Projects from './pages/Projects';
+import Timesheets from './pages/Timesheets';
 import TimeLogs from './pages/TimeLogs';
-import Payroll from './pages/Payroll';
 import Leaves from './pages/Leaves';
 import Documents from './pages/Documents';
 import Training from './pages/Training';
+import Payroll from './pages/Payroll';
+import Performance from './pages/Performance';
 import Assets from './pages/Assets';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 
 function MainApp() {
@@ -33,7 +39,7 @@ function MainApp() {
       }}>
         <div style={{ textAlign: 'center' }}>
           <div className="status-dot clocked_in" style={{ width: '16px', height: '16px', margin: '0 auto 1rem' }} />
-          <h2 style={{ fontSize: '1.2rem', fontWeight: '700' }}>Initializing HR-EcomEdge...</h2>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: '700' }}>Initializing EcomEdge Enterprise HRIS...</h2>
         </div>
       </div>
     );
@@ -43,28 +49,45 @@ function MainApp() {
     return <Login />;
   }
 
+  const handleNavigate = (tab, payload) => {
+    setActiveTab(tab);
+    setSidebarOpen(false);
+  };
+
   const renderContent = () => {
     switch (activeTab) {
       case 'dashboard':
-        return <Dashboard onNavigate={(tab) => setActiveTab(tab)} />;
+        return <Dashboard onNavigate={handleNavigate} />;
       case 'employees':
-        return isManager ? <Employees /> : <Profile />;
+        return <Employees />;
+      case 'teams':
+        return <Teams />;
+      case 'projects':
+        return <Projects />;
+      case 'timesheets':
+        return <Timesheets />;
       case 'timelogs':
         return <TimeLogs />;
-      case 'payroll':
-        return <Payroll />;
       case 'leaves':
         return <Leaves />;
       case 'documents':
         return <Documents />;
       case 'training':
         return <Training />;
+      case 'payroll':
+        return <Payroll />;
+      case 'performance':
+        return <Performance />;
       case 'assets':
         return <Assets />;
+      case 'reports':
+        return isManager ? <Reports /> : <Dashboard onNavigate={handleNavigate} />;
+      case 'settings':
+        return isManager ? <Settings /> : <Profile />;
       case 'profile':
         return <Profile />;
       default:
-        return <Dashboard onNavigate={(tab) => setActiveTab(tab)} />;
+        return <Dashboard onNavigate={handleNavigate} />;
     }
   };
 
@@ -79,17 +102,17 @@ function MainApp() {
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
-        onSelectTab={(tab) => {
-          setActiveTab(tab);
-          setSidebarOpen(false);
-        }}
+        onSelectTab={handleNavigate}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
       <div className="main-content">
-        <Navbar onToggleSidebar={() => setSidebarOpen(prev => !prev)} />
+        <Navbar
+          onToggleSidebar={() => setSidebarOpen(prev => !prev)}
+          onNavigate={handleNavigate}
+        />
         
         <div className="page-content-wrapper">
           <main>{renderContent()}</main>
@@ -100,10 +123,10 @@ function MainApp() {
           <div className="footer-left">
             <span className="footer-brand">EcomEdge HR Management</span>
             <span className="footer-divider">|</span>
-            <span className="footer-sub">Enterprise Workforce &amp; Payroll v2.6</span>
+            <span className="footer-sub">Enterprise Workforce &amp; Payroll v1.0</span>
           </div>
           <div className="footer-right">
-            <span>A product by <strong className="footer-company">VCS Technologies</strong></span>
+            <span>A product by <strong className="footer-company">VCS Technologies 2026</strong></span>
           </div>
         </footer>
       </div>

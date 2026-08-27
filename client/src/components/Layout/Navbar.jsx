@@ -6,17 +6,46 @@ import {
   Moon,
   Clock,
   LogOut,
-  User,
-  ShieldCheck,
-  Building2,
-  Sparkles
+  Search,
+  Bell
 } from 'lucide-react';
 import PunchClockModal from '../TimeClock/PunchClockModal';
+import GlobalSearchModal from '../UI/GlobalSearchModal';
+import NotificationsDrawer from '../UI/NotificationsDrawer';
+import { api } from '../../services/api';
 
-export default function Navbar({ onToggleSidebar }) {
+export default function Navbar({ onToggleSidebar, onNavigate }) {
   const { user, isManager, todayPunch, logout, theme, toggleTheme } = useAuth();
   const [showPunchModal, setShowPunchModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showNotifsDrawer, setShowNotifsDrawer] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [liveTimeString, setLiveTimeString] = useState('');
+
+  // Global Ctrl+K keyboard shortcut
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setShowSearchModal(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Fetch unread notifications count
+  useEffect(() => {
+    const fetchUnread = async () => {
+      try {
+        const res = await api.notifications.getAll();
+        setUnreadCount(res.unread_count || 0);
+      } catch (e) {}
+    };
+    fetchUnread();
+    const interval = setInterval(fetchUnread, 30000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Live time ticker in header
   useEffect(() => {
@@ -52,7 +81,7 @@ export default function Navbar({ onToggleSidebar }) {
           
           <div className="navbar-title-container">
             <span className="navbar-brand-name">
-              EcomEdge
+              ECOMEDGE
             </span>
             <span className="navbar-bullet">•</span>
             <span className="navbar-portal-name">
@@ -62,6 +91,17 @@ export default function Navbar({ onToggleSidebar }) {
         </div>
 
         <div className="navbar-right">
+          {/* Global Quick Search Button */}
+          <button
+            className="navbar-search-btn"
+            onClick={() => setShowSearchModal(true)}
+            title="Global Search across staff, projects & teams (Ctrl+K)"
+          >
+            <Search size={15} color="var(--brand-green)" />
+            <span className="search-text">Search anything...</span>
+            <kbd className="search-kbd">Ctrl K</kbd>
+          </button>
+
           {/* Quick Punch Status Pill */}
           <div
             className="punch-ticker-pill"
@@ -69,10 +109,22 @@ export default function Navbar({ onToggleSidebar }) {
             title="Click to Open Punch Clock"
           >
             <span className={`status-dot ${status}`} />
-            <Clock size={15} color="var(--primary)" />
+            <Clock size={15} color="var(--brand-green)" />
             <span className="punch-ticker-label">{getStatusLabel()}</span>
             <span className="punch-ticker-time">({liveTimeString})</span>
           </div>
+
+          {/* Notifications Center Bell */}
+          <button
+            className="btn-icon notif-bell-btn"
+            onClick={() => setShowNotifsDrawer(true)}
+            title="Notifications & Alerts"
+          >
+            <Bell size={18} />
+            {unreadCount > 0 && (
+              <span className="notif-badge-pill">{unreadCount}</span>
+            )}
+          </button>
 
           {/* Theme Switcher */}
           <button
@@ -113,6 +165,23 @@ export default function Navbar({ onToggleSidebar }) {
           </button>
         </div>
       </header>
+
+      {/* Global Search Dialog */}
+      <GlobalSearchModal
+        isOpen={showSearchModal}
+        onClose={() => setShowSearchModal(false)}
+        onNavigate={onNavigate}
+      />
+
+      {/* Notifications Slide-over Drawer */}
+      <NotificationsDrawer
+        isOpen={showNotifsDrawer}
+        onClose={() => {
+          setShowNotifsDrawer(false);
+          setUnreadCount(0);
+        }}
+        onNavigate={onNavigate}
+      />
 
       {/* Punch Clock Modal */}
       <PunchClockModal
