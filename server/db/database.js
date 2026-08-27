@@ -24,13 +24,13 @@ if (!fs.existsSync(uploadsDir)) {
 
 // Supabase client
 let supabase = null;
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || 'https://bmlhdnexcxdjoqoebtyt.supabase.co';
+const supabaseKey = process.env.SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || 'sb_publishable_IF_CV_WXZAwGh90QgAZNkg_Z28bzo0N';
 
 if (supabaseUrl && supabaseKey) {
   try {
     supabase = createClient(supabaseUrl, supabaseKey);
-    console.log('⚡ Supabase Client initialized successfully!');
+    console.log('⚡ Supabase Client initialized successfully with remote persistence!');
   } catch (err) {
     console.warn('⚠️ Supabase initialization skipped:', err.message);
   }

@@ -5,8 +5,11 @@ const { db, pushToSupabase } = require('../db/database');
 const { authenticate, requireManager, requireSelfOrManager } = require('../middleware/auth');
 
 // GET /api/employees (List with search and filters)
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
+    const { syncFromSupabase } = require('../db/database');
+    await syncFromSupabase();
+
     const isManager = req.user.role === 'manager';
     const { search, department, status, team_id, designation_id } = req.query;
 
@@ -294,8 +297,51 @@ router.post('/', authenticate, requireManager, async (req, res) => {
           emergency_used: 0
         });
 
-        // Pull latest from Supabase into SQLite
-        await syncFromSupabase(true);
+        // Insert directly into SQLite as well
+        db.transaction(() => {
+          db.prepare(`
+            INSERT OR REPLACE INTO employees (
+              id, employee_code, first_name, last_name, job_title, department,
+              team_id, designation_id, manager_id,
+              employment_status, employment_type, hire_date, hourly_rate,
+              monthly_salary, phone, address, emergency_contact_name,
+              emergency_contact_phone, bank_name, bank_account_number, avatar_url
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          `).run(
+            createdEmpId,
+            employeeCode,
+            first_name.trim(),
+            last_name.trim(),
+            job_title.trim(),
+            department.trim(),
+            team_id ? parseInt(team_id, 10) : null,
+            designation_id ? parseInt(designation_id, 10) : null,
+            manager_id ? parseInt(manager_id, 10) : null,
+            employment_status || 'active',
+            employment_type || 'full_time',
+            hire_date,
+            parseFloat(hourly_rate) || 0,
+            parseFloat(monthly_salary) || 0,
+            phone || null,
+            address || null,
+            emergency_contact_name || null,
+            emergency_contact_phone || null,
+            bank_name || null,
+            bank_account_number || null,
+            avatar_url || null
+          );
+
+          db.prepare(`
+            INSERT OR REPLACE INTO users (username, password_hash, role, employee_id, avatar_url)
+            VALUES (?, ?, ?, ?, ?)
+          `).run(finalUsername, passwordHash, userRole, createdEmpId, avatar_url || null);
+
+          const currentYear = new Date().getFullYear();
+          db.prepare(`
+            INSERT OR REPLACE INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
+            VALUES (?, ?, 15, 10, 5, 0, 0, 0)
+          `).run(createdEmpId, currentYear);
+        })();
       }
     }
 
