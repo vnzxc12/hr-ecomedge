@@ -153,7 +153,13 @@ export default function Teams() {
 
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <UserCheck size={16} color="var(--brand-green)" />
+                  <div className="user-avatar" style={{ width: '26px', height: '26px', fontSize: '0.65rem' }}>
+                    {team.lead_avatar_url ? (
+                      <img src={team.lead_avatar_url} alt="Lead" />
+                    ) : (
+                      team.lead_first_name ? team.lead_first_name[0] : 'U'
+                    )}
+                  </div>
                   <div style={{ fontSize: '0.78rem' }}>
                     <span style={{ color: 'var(--text-muted)' }}>Lead: </span>
                     <strong style={{ color: 'var(--text-primary)' }}>

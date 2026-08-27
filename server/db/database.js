@@ -396,40 +396,20 @@ function initSchema() {
   }
 }
 
-// Seed clean initial accounts & EcomEdge demo data if database is empty
+// Seed clean initial admin account if database is empty
 function seedIfEmpty() {
   const userCount = sqlite.prepare('SELECT COUNT(*) as count FROM users').get().count;
   if (userCount > 0) return;
 
-  const passwordHashAdmin = bcrypt.hashSync('admin123', 10);
-  const passwordHashMgr = bcrypt.hashSync('password01', 10);
-
-  const insertEmp = sqlite.prepare(`
-    INSERT INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `);
+  const passwordHashAdmin = bcrypt.hashSync('password123', 10);
 
   const insertUser = sqlite.prepare(`
     INSERT INTO users (id, username, password_hash, role, employee_id)
-    VALUES (?, ?, ?, ?, ?)
+    VALUES (1, 'admin', ?, 'manager', NULL)
   `);
-
-  const insertBalance = sqlite.prepare(`
-    INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `);
-
-  const currentYear = new Date().getFullYear();
 
   sqlite.transaction(() => {
-    insertEmp.run(1, 'EMP-001', 'Admin', 'User', 'System Owner / Executive Director', 'Management', 'active', 'full_time', '2026-01-01', 0.00, 75000.00, '+63 900 000 0001', 'Manila, Philippines', 'Emergency Contact', '+63 900 000 0000', 'BDO', '**** 0001');
-    insertEmp.run(2, 'EMP-002', 'Operations', 'Manager', 'Operations HR Manager', 'Operations', 'active', 'full_time', '2026-01-01', 0.00, 50000.00, '+63 900 000 0002', 'Manila, Philippines', 'Emergency Contact', '+63 900 000 0000', 'BPI', '**** 0002');
-
-    insertUser.run(1, 'admin', passwordHashAdmin, 'manager', 1);
-    insertUser.run(2, 'manager', passwordHashMgr, 'manager', 2);
-
-    insertBalance.run(1, currentYear, 0, 0, 0, 0, 0, 0);
-    insertBalance.run(2, currentYear, 0, 0, 0, 0, 0, 0);
+    insertUser.run(passwordHashAdmin);
   })();
 }
 

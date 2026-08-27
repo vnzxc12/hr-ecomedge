@@ -21,7 +21,7 @@ router.get('/', authenticate, (req, res) => {
       LEFT JOIN teams t ON e.team_id = t.id
       LEFT JOIN designations d ON e.designation_id = d.id
       LEFT JOIN employees m ON e.manager_id = m.id
-      WHERE 1=1
+      WHERE (u.username != 'admin' OR u.username IS NULL)
     `;
     const params = [];
 

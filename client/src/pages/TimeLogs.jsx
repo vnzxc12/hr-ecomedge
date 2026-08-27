@@ -246,7 +246,9 @@ export default function TimeLogs() {
                   <tr key={emp.id}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div className="user-avatar">{emp.first_name[0]}</div>
+                        <div className="user-avatar">
+                          {emp.avatar_url ? <img src={emp.avatar_url} alt="Avatar" /> : emp.first_name[0]}
+                        </div>
                         <div>
                           <div style={{ fontWeight: '700' }}>{emp.first_name} {emp.last_name}</div>
                           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.employee_code} • {emp.job_title}</div>

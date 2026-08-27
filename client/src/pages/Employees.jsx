@@ -29,7 +29,9 @@ import {
   X,
   Eye,
   ShieldCheck,
-  Key
+  Key,
+  Camera,
+  Image as ImageIcon
 } from 'lucide-react';
 
 export default function Employees() {
@@ -56,6 +58,7 @@ export default function Employees() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDocUploadModal, setShowDocUploadModal] = useState(false);
   const [editingEmpId, setEditingEmpId] = useState(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Forms
   const [empForm, setEmpForm] = useState({
@@ -79,7 +82,8 @@ export default function Employees() {
     bank_account_number: '',
     username: '',
     password: 'password123',
-    role: 'employee'
+    role: 'employee',
+    avatar_url: ''
   });
 
   const [editForm, setEditForm] = useState({
@@ -102,7 +106,8 @@ export default function Employees() {
     bank_name: '',
     bank_account_number: '',
     role: 'employee',
-    password: ''
+    password: '',
+    avatar_url: ''
   });
 
   const [docForm, setDocForm] = useState({
@@ -183,9 +188,52 @@ export default function Employees() {
       bank_name: emp.bank_name || 'BDO',
       bank_account_number: emp.bank_account_number || '',
       role: emp.role || 'employee',
-      password: ''
+      password: '',
+      avatar_url: emp.avatar_url || ''
     });
     setShowEditModal(true);
+  };
+
+  const handleDirectAvatarUpload = async (empId, file) => {
+    if (!file) return;
+    setUploadingAvatar(true);
+    try {
+      // Convert file to Base64 data URL for fast and reliable upload
+      const reader = new FileReader();
+      reader.onloadend = async () => {
+        const base64Url = reader.result;
+        try {
+          const res = await api.employees.uploadAvatar(empId, JSON.stringify({ avatar_url: base64Url }), true);
+          showToast('Employee photo updated successfully!', 'success');
+          if (profileData && profileData.employee) {
+            setProfileData({
+              ...profileData,
+              employee: { ...profileData.employee, avatar_url: res.avatar_url || base64Url }
+            });
+          }
+          loadEmployees();
+        } catch (uploadErr) {
+          // Fallback to multipart FormData
+          const formData = new FormData();
+          formData.append('avatar', file);
+          const res = await api.employees.uploadAvatar(empId, formData);
+          showToast('Employee photo updated successfully!', 'success');
+          if (profileData && profileData.employee) {
+            setProfileData({
+              ...profileData,
+              employee: { ...profileData.employee, avatar_url: res.avatar_url }
+            });
+          }
+          loadEmployees();
+        } finally {
+          setUploadingAvatar(false);
+        }
+      };
+      reader.readAsDataURL(file);
+    } catch (err) {
+      showToast(err.message, 'danger');
+      setUploadingAvatar(false);
+    }
   };
 
   const handleCreateEmployee = async (e) => {
@@ -194,6 +242,30 @@ export default function Employees() {
       await api.employees.create(empForm);
       showToast('Employee created successfully!', 'success');
       setShowAddModal(false);
+      setEmpForm({
+        first_name: '',
+        last_name: '',
+        job_title: 'Research Analyst',
+        department: 'Research & Analytics',
+        team_id: '',
+        designation_id: '',
+        manager_id: '',
+        employment_status: 'active',
+        employment_type: 'full_time',
+        hire_date: new Date().toISOString().split('T')[0],
+        hourly_rate: 187.50,
+        monthly_salary: 30000.00,
+        phone: '',
+        address: '',
+        emergency_contact_name: '',
+        emergency_contact_phone: '',
+        bank_name: 'BDO',
+        bank_account_number: '',
+        username: '',
+        password: 'password123',
+        role: 'employee',
+        avatar_url: ''
+      });
       loadEmployees();
     } catch (err) {
       showToast(err.message, 'danger');
@@ -281,8 +353,45 @@ export default function Employees() {
         {/* Rich Header Card */}
         <div className="glass-card employee-header-card" style={{ marginBottom: '1.5rem', padding: '1.75rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', flexWrap: 'wrap' }}>
-            <div className="user-avatar" style={{ width: '76px', height: '76px', fontSize: '1.8rem', border: '3px solid var(--brand-green)' }}>
-              {emp.avatar_url ? <img src={emp.avatar_url} alt="Profile" /> : emp.first_name[0]}
+            {/* Interactive Circular Avatar with Camera Upload */}
+            <div style={{ position: 'relative', display: 'inline-block' }}>
+              <div className="user-avatar" style={{ width: '82px', height: '82px', fontSize: '1.8rem', border: '3px solid var(--brand-green)' }}>
+                {emp.avatar_url ? <img src={emp.avatar_url} alt="Profile" /> : emp.first_name[0]}
+              </div>
+              {isManager && (
+                <label
+                  htmlFor="profile-header-avatar-upload"
+                  style={{
+                    position: 'absolute',
+                    bottom: '-2px',
+                    right: '-2px',
+                    width: '28px',
+                    height: '28px',
+                    background: 'var(--brand-green)',
+                    color: '#ffffff',
+                    borderRadius: '50%',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    border: '2px solid var(--bg-card)'
+                  }}
+                  title="Upload / Change Employee Picture"
+                >
+                  <Camera size={14} />
+                  <input
+                    id="profile-header-avatar-upload"
+                    type="file"
+                    accept="image/*"
+                    style={{ display: 'none' }}
+                    disabled={uploadingAvatar}
+                    onChange={(e) => {
+                      if (e.target.files?.[0]) handleDirectAvatarUpload(emp.id, e.target.files[0]);
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             <div style={{ flex: 1, minWidth: '240px' }}>
@@ -707,6 +816,38 @@ export default function Employees() {
               </div>
               <form onSubmit={handleUpdateEmployee}>
                 <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                  {/* Photo Upload Section in Edit Modal */}
+                  <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                    <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <Camera size={16} color="var(--brand-green)" /> Profile Picture / Photo
+                    </label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem' }}>
+                      <div className="user-avatar" style={{ width: '60px', height: '60px', fontSize: '1.3rem', border: '2px solid var(--brand-green)', flexShrink: 0 }}>
+                        {editForm.avatar_url ? <img src={editForm.avatar_url} alt="Avatar Preview" /> : (editForm.first_name ? editForm.first_name[0] : 'U')}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="form-control"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                              const reader = new FileReader();
+                              reader.onloadend = () => {
+                                setEditForm({ ...editForm, avatar_url: reader.result });
+                              };
+                              reader.readAsDataURL(file);
+                            }
+                          }}
+                        />
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                          Upload JPG, PNG or WEBP image. Image is automatically cropped to circular avatar.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* System Role Selector */}
                   <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                     <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -721,7 +862,7 @@ export default function Employees() {
                       <option value="manager">👑 HR / Operations Manager (Full Admin Rights)</option>
                     </select>
                     <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
-                      HR / Managers can approve leaves, timesheets, view company-wide reports, and manage all staff.
+                      HR / Managers have full admin access across payroll, attendance, timesheets, performance, and workforce settings.
                     </span>
                   </div>
 
@@ -950,7 +1091,7 @@ export default function Employees() {
             <Users size={26} color="var(--brand-green)" /> Workforce &amp; Employee Directory
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
-            Browse EcomEdge research staff, manage employee dossiers, roles, and hiring records.
+            Browse EcomEdge research staff, manage employee dossiers, roles, pictures, and hiring records.
           </p>
         </div>
         {isManager && (
@@ -1038,7 +1179,7 @@ export default function Employees() {
                   <tr key={emp.id} style={{ cursor: 'pointer' }} onClick={() => handleSelectEmployee(emp.id)}>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div className="user-avatar" style={{ width: '36px', height: '36px', fontSize: '0.85rem' }}>
+                        <div className="user-avatar" style={{ width: '38px', height: '38px', fontSize: '0.85rem' }}>
                           {emp.avatar_url ? <img src={emp.avatar_url} alt="Avatar" /> : emp.first_name[0]}
                         </div>
                         <div>
@@ -1105,6 +1246,38 @@ export default function Employees() {
             </div>
             <form onSubmit={handleCreateEmployee}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                {/* Photo Upload Section in Add Modal */}
+                <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Camera size={16} color="var(--brand-green)" /> Profile Picture / Photo (Optional)
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem' }}>
+                    <div className="user-avatar" style={{ width: '60px', height: '60px', fontSize: '1.3rem', border: '2px solid var(--brand-green)', flexShrink: 0 }}>
+                      {empForm.avatar_url ? <img src={empForm.avatar_url} alt="Avatar Preview" /> : (empForm.first_name ? empForm.first_name[0] : '📷')}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="form-control"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setEmpForm({ ...empForm, avatar_url: reader.result });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                        Select employee picture (JPG, PNG, WEBP).
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* System Role Selector */}
                 <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                   <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
@@ -1265,6 +1438,38 @@ export default function Employees() {
             </div>
             <form onSubmit={handleUpdateEmployee}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                {/* Photo Upload Section in Edit Modal */}
+                <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <Camera size={16} color="var(--brand-green)" /> Profile Picture / Photo
+                  </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.5rem' }}>
+                    <div className="user-avatar" style={{ width: '60px', height: '60px', fontSize: '1.3rem', border: '2px solid var(--brand-green)', flexShrink: 0 }}>
+                      {editForm.avatar_url ? <img src={editForm.avatar_url} alt="Avatar Preview" /> : (editForm.first_name ? editForm.first_name[0] : 'U')}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="form-control"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setEditForm({ ...editForm, avatar_url: reader.result });
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
+                        Upload new JPG, PNG or WEBP image.
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
                 {/* System Role Selector */}
                 <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                   <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
