@@ -90,6 +90,20 @@ router.get('/:id', authenticate, (req, res) => {
     const isManager = req.user.role === 'manager';
     const isSelf = req.user.employee_id === empId;
 
+    const employee = db.prepare(`
+      SELECT e.*, 
+             u.id as user_id, u.username, u.role, u.avatar_url,
+             t.name as team_name,
+             d.title as designation_title,
+             m.first_name as manager_first_name, m.last_name as manager_last_name
+      FROM employees e
+      LEFT JOIN users u ON u.employee_id = e.id
+      LEFT JOIN teams t ON e.team_id = t.id
+      LEFT JOIN designations d ON e.designation_id = d.id
+      LEFT JOIN employees m ON e.manager_id = m.id
+      WHERE e.id = ?
+    `).get(empId);
+
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found.' });
     }
