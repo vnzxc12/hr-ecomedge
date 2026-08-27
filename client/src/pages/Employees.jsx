@@ -27,7 +27,9 @@ import {
   MapPin,
   ArrowLeft,
   X,
-  Eye
+  Eye,
+  ShieldCheck,
+  Key
 } from 'lucide-react';
 
 export default function Employees() {
@@ -51,7 +53,9 @@ export default function Employees() {
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
   const [showDocUploadModal, setShowDocUploadModal] = useState(false);
+  const [editingEmpId, setEditingEmpId] = useState(null);
 
   // Forms
   const [empForm, setEmpForm] = useState({
@@ -76,6 +80,29 @@ export default function Employees() {
     username: '',
     password: 'password123',
     role: 'employee'
+  });
+
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    job_title: '',
+    department: 'Research & Analytics',
+    team_id: '',
+    designation_id: '',
+    manager_id: '',
+    employment_status: 'active',
+    employment_type: 'full_time',
+    hire_date: '',
+    hourly_rate: 0,
+    monthly_salary: 0,
+    phone: '',
+    address: '',
+    emergency_contact_name: '',
+    emergency_contact_phone: '',
+    bank_name: '',
+    bank_account_number: '',
+    role: 'employee',
+    password: ''
   });
 
   const [docForm, setDocForm] = useState({
@@ -134,6 +161,33 @@ export default function Employees() {
     }
   };
 
+  const handleOpenEdit = (emp) => {
+    setEditingEmpId(emp.id);
+    setEditForm({
+      first_name: emp.first_name || '',
+      last_name: emp.last_name || '',
+      job_title: emp.job_title || '',
+      department: emp.department || 'Research & Analytics',
+      team_id: emp.team_id || '',
+      designation_id: emp.designation_id || '',
+      manager_id: emp.manager_id || '',
+      employment_status: emp.employment_status || 'active',
+      employment_type: emp.employment_type || 'full_time',
+      hire_date: emp.hire_date || '',
+      hourly_rate: emp.hourly_rate || 0,
+      monthly_salary: emp.monthly_salary || 0,
+      phone: emp.phone || '',
+      address: emp.address || '',
+      emergency_contact_name: emp.emergency_contact_name || '',
+      emergency_contact_phone: emp.emergency_contact_phone || '',
+      bank_name: emp.bank_name || 'BDO',
+      bank_account_number: emp.bank_account_number || '',
+      role: emp.role || 'employee',
+      password: ''
+    });
+    setShowEditModal(true);
+  };
+
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
     try {
@@ -141,6 +195,21 @@ export default function Employees() {
       showToast('Employee created successfully!', 'success');
       setShowAddModal(false);
       loadEmployees();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
+  const handleUpdateEmployee = async (e) => {
+    e.preventDefault();
+    try {
+      await api.employees.update(editingEmpId, editForm);
+      showToast('Employee updated successfully!', 'success');
+      setShowEditModal(false);
+      loadEmployees();
+      if (selectedEmployeeId === editingEmpId) {
+        handleSelectEmployee(editingEmpId);
+      }
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -188,14 +257,26 @@ export default function Employees() {
 
     return (
       <div className="page-container">
-        {/* Back Button */}
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setSelectedEmployeeId(null)}
-          style={{ marginBottom: '1.25rem', display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
-        >
-          <ArrowLeft size={15} /> Back to Employee Directory
-        </button>
+        {/* Top Action Row */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setSelectedEmployeeId(null)}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+          >
+            <ArrowLeft size={15} /> Back to Directory
+          </button>
+
+          {isManager && (
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={() => handleOpenEdit(emp)}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}
+            >
+              <Edit2 size={14} /> Edit Employee Profile
+            </button>
+          )}
+        </div>
 
         {/* Rich Header Card */}
         <div className="glass-card employee-header-card" style={{ marginBottom: '1.5rem', padding: '1.75rem' }}>
@@ -211,6 +292,9 @@ export default function Employees() {
                 </h1>
                 <span className="badge badge-success" style={{ fontSize: '0.78rem' }}>
                   {emp.employee_code}
+                </span>
+                <span className={`badge ${emp.role === 'manager' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: '0.75rem' }}>
+                  {emp.role === 'manager' ? '👑 HR / Admin' : '👤 Employee'}
                 </span>
                 <span className={`badge ${emp.employment_status === 'active' ? 'badge-success' : 'badge-danger'}`}>
                   {emp.employment_status.toUpperCase()}
@@ -280,7 +364,8 @@ export default function Employees() {
                 <div><span style={{ color: 'var(--text-muted)' }}>Team:</span> <strong style={{ color: 'var(--brand-green)' }}>{emp.team_name || 'General'}</strong></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Department:</span> <strong>{emp.department}</strong></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Designation:</span> <strong>{emp.designation_title || emp.job_title}</strong></div>
-                <div><span style={{ color: 'var(--text-muted)' }}>Employment Type:</span> <strong style={{ textTransform: 'capitalize' }}>{emp.employment_type.replace('_', ' ')}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>System Access:</span> <strong style={{ color: emp.role === 'manager' ? 'var(--warning)' : 'inherit' }}>{emp.role === 'manager' ? 'HR / Manager (Full Admin Rights)' : 'Standard Employee'}</strong></div>
+                <div><span style={{ color: 'var(--text-muted)' }}>Employment Type:</span> <strong style={{ textTransform: 'capitalize' }}>{emp.employment_type?.replace('_', ' ')}</strong></div>
                 <div><span style={{ color: 'var(--text-muted)' }}>Hire Date:</span> <strong>{emp.hire_date}</strong></div>
               </div>
             </div>
@@ -303,16 +388,20 @@ export default function Employees() {
                   </tr>
                 </thead>
                 <tbody>
-                  {logs.map(l => (
-                    <tr key={l.id}>
-                      <td><strong>{l.date}</strong></td>
-                      <td>{l.clock_in ? new Date(l.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
-                      <td>{l.clock_out ? new Date(l.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In progress'}</td>
-                      <td><strong>{l.total_hours} hrs</strong></td>
-                      <td><span className="badge badge-success">{l.status}</span></td>
-                      <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{l.notes || '—'}</td>
-                    </tr>
-                  ))}
+                  {logs.length === 0 ? (
+                    <tr><td colSpan={6} style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>No attendance records logged yet.</td></tr>
+                  ) : (
+                    logs.map(l => (
+                      <tr key={l.id}>
+                        <td><strong>{l.date}</strong></td>
+                        <td>{l.clock_in ? new Date(l.clock_in).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—'}</td>
+                        <td>{l.clock_out ? new Date(l.clock_out).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'In progress'}</td>
+                        <td><strong>{l.total_hours} hrs</strong></td>
+                        <td><span className="badge badge-success">{l.status}</span></td>
+                        <td style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{l.notes || '—'}</td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
@@ -608,6 +697,243 @@ export default function Employees() {
             </div>
           </div>
         )}
+
+        {/* Edit Employee Modal */}
+        {showEditModal && (
+          <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+            <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
+              <div className="modal-header">
+                <h3 style={{ margin: 0, fontWeight: 800 }}>Edit Employee Profile</h3>
+              </div>
+              <form onSubmit={handleUpdateEmployee}>
+                <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                  {/* System Role Selector */}
+                  <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                    <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <ShieldCheck size={16} color="var(--brand-green)" /> System Account Role &amp; Permissions *
+                    </label>
+                    <select
+                      className="form-control"
+                      value={editForm.role}
+                      onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                    >
+                      <option value="employee">👤 Standard Employee (Self-Service ESS Access)</option>
+                      <option value="manager">👑 HR / Operations Manager (Full Admin Rights)</option>
+                    </select>
+                    <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
+                      HR / Managers can approve leaves, timesheets, view company-wide reports, and manage all staff.
+                    </span>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">First Name *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.first_name}
+                        onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Last Name *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.last_name}
+                        onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Job Title / Designation *</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.job_title}
+                        onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })}
+                        required
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Department *</label>
+                      <select
+                        className="form-control"
+                        value={editForm.department}
+                        onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                        required
+                      >
+                        <option value="Research & Analytics">Research &amp; Analytics</option>
+                        <option value="Operations">Operations</option>
+                        <option value="Client Services">Client Services</option>
+                        <option value="Management">Management</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Assigned Team</label>
+                      <select
+                        className="form-control"
+                        value={editForm.team_id}
+                        onChange={(e) => setEditForm({ ...editForm, team_id: e.target.value })}
+                      >
+                        <option value="">-- No Team --</option>
+                        {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Direct Manager</label>
+                      <select
+                        className="form-control"
+                        value={editForm.manager_id}
+                        onChange={(e) => setEditForm({ ...editForm, manager_id: e.target.value })}
+                      >
+                        <option value="">-- Executive Director --</option>
+                        {employees.filter(e => e.id !== editingEmpId).map(e => (
+                          <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Employment Status</label>
+                      <select
+                        className="form-control"
+                        value={editForm.employment_status}
+                        onChange={(e) => setEditForm({ ...editForm, employment_status: e.target.value })}
+                      >
+                        <option value="active">Active</option>
+                        <option value="probationary">Probationary</option>
+                        <option value="resigned">Resigned</option>
+                        <option value="terminated">Terminated</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Employment Type</label>
+                      <select
+                        className="form-control"
+                        value={editForm.employment_type}
+                        onChange={(e) => setEditForm({ ...editForm, employment_type: e.target.value })}
+                      >
+                        <option value="full_time">Full Time</option>
+                        <option value="part_time">Part Time</option>
+                        <option value="contract">Contract</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Monthly Salary (PHP)</label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={editForm.monthly_salary}
+                        onChange={(e) => setEditForm({ ...editForm, monthly_salary: parseFloat(e.target.value) || 0, hourly_rate: (parseFloat(e.target.value) || 0) / 160 })}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Hire Date</label>
+                      <input
+                        type="date"
+                        className="form-control"
+                        value={editForm.hire_date}
+                        onChange={(e) => setEditForm({ ...editForm, hire_date: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Phone</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.phone}
+                        onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Address</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.address}
+                        onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Emergency Contact Name</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.emergency_contact_name}
+                        onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Emergency Contact Phone</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.emergency_contact_phone}
+                        onChange={(e) => setEditForm({ ...editForm, emergency_contact_phone: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-row">
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Bank Name</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.bank_name}
+                        onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })}
+                      />
+                    </div>
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Bank Account Number</label>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editForm.bank_account_number}
+                        onChange={(e) => setEditForm({ ...editForm, bank_account_number: e.target.value })}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Reset Password (Leave blank to keep current password)</label>
+                    <input
+                      type="password"
+                      className="form-control"
+                      placeholder="Enter new password to reset"
+                      value={editForm.password}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="modal-footer">
+                  <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary">Save Changes</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -624,7 +950,7 @@ export default function Employees() {
             <Users size={26} color="var(--brand-green)" /> Workforce &amp; Employee Directory
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
-            Browse EcomEdge research staff, view 9-tab employee dossiers, and manage hiring records.
+            Browse EcomEdge research staff, manage employee dossiers, roles, and hiring records.
           </p>
         </div>
         {isManager && (
@@ -700,6 +1026,7 @@ export default function Employees() {
                   <th>Employee</th>
                   <th>ID Code</th>
                   <th>Position</th>
+                  <th>Role</th>
                   <th>Team / Department</th>
                   <th>Manager</th>
                   <th>Status</th>
@@ -725,6 +1052,11 @@ export default function Employees() {
                     </td>
                     <td style={{ fontWeight: 600 }}>{emp.job_title}</td>
                     <td>
+                      <span className={`badge ${emp.role === 'manager' ? 'badge-warning' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
+                        {emp.role === 'manager' ? '👑 Admin' : '👤 Employee'}
+                      </span>
+                    </td>
+                    <td>
                       <div><strong>{emp.team_name || 'General'}</strong></div>
                       <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{emp.department}</div>
                     </td>
@@ -737,15 +1069,24 @@ export default function Employees() {
                       </span>
                     </td>
                     <td style={{ textAlign: 'right' }}>
-                      <button
-                        className="btn btn-sm btn-secondary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSelectEmployee(emp.id);
-                        }}
-                      >
-                        <Eye size={13} /> View Profile
-                      </button>
+                      <div style={{ display: 'inline-flex', gap: '0.35rem' }} onClick={(e) => e.stopPropagation()}>
+                        <button
+                          className="btn btn-sm btn-secondary"
+                          onClick={() => handleSelectEmployee(emp.id)}
+                          title="View Profile"
+                        >
+                          <Eye size={13} /> View
+                        </button>
+                        {isManager && (
+                          <button
+                            className="btn btn-sm btn-secondary"
+                            onClick={() => handleOpenEdit(emp)}
+                            title="Edit Employee"
+                          >
+                            <Edit2 size={13} /> Edit
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -763,7 +1104,25 @@ export default function Employees() {
               <h3 style={{ margin: 0, fontWeight: 800 }}>Onboard New Employee</h3>
             </div>
             <form onSubmit={handleCreateEmployee}>
-              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                {/* System Role Selector */}
+                <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <ShieldCheck size={16} color="var(--brand-green)" /> System Account Role &amp; Permissions *
+                  </label>
+                  <select
+                    className="form-control"
+                    value={empForm.role}
+                    onChange={(e) => setEmpForm({ ...empForm, role: e.target.value })}
+                  >
+                    <option value="employee">👤 Standard Employee (Self-Service ESS Access)</option>
+                    <option value="manager">👑 HR / Operations Manager (Full Admin Rights)</option>
+                  </select>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
+                    HR / Managers have full admin access across payroll, attendance, timesheets, performance, and workforce settings.
+                  </span>
+                </div>
+
                 <div className="form-row">
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">First Name *</label>
@@ -891,6 +1250,243 @@ export default function Employees() {
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
                 <button type="submit" className="btn btn-primary">Create Employee</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Employee Modal */}
+      {showEditModal && (
+        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3 style={{ margin: 0, fontWeight: 800 }}>Edit Employee Profile</h3>
+            </div>
+            <form onSubmit={handleUpdateEmployee}>
+              <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
+                {/* System Role Selector */}
+                <div className="form-group" style={{ margin: 0, background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <label className="form-label" style={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <ShieldCheck size={16} color="var(--brand-green)" /> System Account Role &amp; Permissions *
+                  </label>
+                  <select
+                    className="form-control"
+                    value={editForm.role}
+                    onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                  >
+                    <option value="employee">👤 Standard Employee (Self-Service ESS Access)</option>
+                    <option value="manager">👑 HR / Operations Manager (Full Admin Rights)</option>
+                  </select>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.3rem', display: 'block' }}>
+                    HR / Managers have full admin access across payroll, attendance, timesheets, performance, and workforce settings.
+                  </span>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">First Name *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.first_name}
+                      onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Last Name *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.last_name}
+                      onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Job Title / Designation *</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.job_title}
+                      onChange={(e) => setEditForm({ ...editForm, job_title: e.target.value })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Department *</label>
+                    <select
+                      className="form-control"
+                      value={editForm.department}
+                      onChange={(e) => setEditForm({ ...editForm, department: e.target.value })}
+                      required
+                    >
+                      <option value="Research & Analytics">Research &amp; Analytics</option>
+                      <option value="Operations">Operations</option>
+                      <option value="Client Services">Client Services</option>
+                      <option value="Management">Management</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Assigned Team</label>
+                    <select
+                      className="form-control"
+                      value={editForm.team_id}
+                      onChange={(e) => setEditForm({ ...editForm, team_id: e.target.value })}
+                    >
+                      <option value="">-- No Team --</option>
+                      {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Direct Manager</label>
+                    <select
+                      className="form-control"
+                      value={editForm.manager_id}
+                      onChange={(e) => setEditForm({ ...editForm, manager_id: e.target.value })}
+                    >
+                      <option value="">-- Executive Director --</option>
+                      {employees.filter(e => e.id !== editingEmpId).map(e => (
+                        <option key={e.id} value={e.id}>{e.first_name} {e.last_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Employment Status</label>
+                    <select
+                      className="form-control"
+                      value={editForm.employment_status}
+                      onChange={(e) => setEditForm({ ...editForm, employment_status: e.target.value })}
+                    >
+                      <option value="active">Active</option>
+                      <option value="probationary">Probationary</option>
+                      <option value="resigned">Resigned</option>
+                      <option value="terminated">Terminated</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Employment Type</label>
+                    <select
+                      className="form-control"
+                      value={editForm.employment_type}
+                      onChange={(e) => setEditForm({ ...editForm, employment_type: e.target.value })}
+                    >
+                      <option value="full_time">Full Time</option>
+                      <option value="part_time">Part Time</option>
+                      <option value="contract">Contract</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Monthly Salary (PHP)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editForm.monthly_salary}
+                      onChange={(e) => setEditForm({ ...editForm, monthly_salary: parseFloat(e.target.value) || 0, hourly_rate: (parseFloat(e.target.value) || 0) / 160 })}
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Hire Date</label>
+                    <input
+                      type="date"
+                      className="form-control"
+                      value={editForm.hire_date}
+                      onChange={(e) => setEditForm({ ...editForm, hire_date: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Phone</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Address</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.address}
+                      onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Emergency Contact Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.emergency_contact_name}
+                      onChange={(e) => setEditForm({ ...editForm, emergency_contact_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Emergency Contact Phone</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.emergency_contact_phone}
+                      onChange={(e) => setEditForm({ ...editForm, emergency_contact_phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Bank Name</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.bank_name}
+                      onChange={(e) => setEditForm({ ...editForm, bank_name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Bank Account Number</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editForm.bank_account_number}
+                      onChange={(e) => setEditForm({ ...editForm, bank_account_number: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ margin: 0 }}>
+                  <label className="form-label">Reset Password (Leave blank to keep current password)</label>
+                  <input
+                    type="password"
+                    className="form-control"
+                    placeholder="Enter new password to reset"
+                    value={editForm.password}
+                    onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary">Save Changes</button>
               </div>
             </form>
           </div>

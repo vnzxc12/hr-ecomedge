@@ -153,16 +153,6 @@ export default function Navbar({ onToggleSidebar, onNavigate }) {
               </div>
             </div>
           </div>
-
-          {/* Quick Logout Button */}
-          <button
-            className="btn-icon navbar-logout-btn"
-            onClick={logout}
-            title="Sign Out"
-            style={{ color: 'var(--danger)' }}
-          >
-            <LogOut size={18} />
-          </button>
         </div>
       </header>
 

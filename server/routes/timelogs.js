@@ -29,27 +29,40 @@ function computeHours(clockInStr, breakStartStr, breakEndStr, clockOutStr) {
 // POST /api/timelogs/punch (Punch Clock: In, Lunch/Break Start, Lunch/Break End, Out)
 router.post('/punch', authenticate, (req, res) => {
   try {
-    const employeeId = req.user.employee_id;
+    let employeeId = req.user.employee_id;
     if (!employeeId) {
-      return res.status(400).json({ error: 'No employee record associated with this account.' });
+      // Try to find employee by user id or user code
+      const emp = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.user.id);
+      if (emp) employeeId = emp.id;
+      else {
+        return res.status(400).json({ error: 'No employee profile linked to this user account. Please contact your HR manager.' });
+      }
     }
 
     const { action, notes } = req.body; // 'clock_in' | 'break_start' | 'break_end' | 'clock_out'
     const today = new Date().toISOString().split('T')[0];
     const nowIso = new Date().toISOString();
 
-    let existingLog = db.prepare(`
+    // 1. Find active open shift first (status is clocked_in or on_break)
+    let activeLog = db.prepare(`
+      SELECT * FROM time_logs
+      WHERE employee_id = ? AND status IN ('clocked_in', 'on_break')
+      ORDER BY id DESC LIMIT 1
+    `).get(employeeId);
+
+    // 2. Fallback to today's most recent log if no open shift
+    let existingLog = activeLog || db.prepare(`
       SELECT * FROM time_logs
       WHERE employee_id = ? AND date = ?
       ORDER BY id DESC LIMIT 1
     `).get(employeeId, today);
 
     if (action === 'clock_in') {
-      if (existingLog && existingLog.status !== 'clocked_out') {
-        return res.status(400).json({ error: `You are already ${existingLog.status === 'on_break' ? 'on break' : 'clocked in'}.` });
+      if (activeLog) {
+        return res.status(400).json({ error: `You are already ${activeLog.status === 'on_break' ? 'on break' : 'clocked in'}.` });
       }
 
-      // If user had a prior finished shift today, create new entry or restart
+      // If user had a prior finished shift today or is starting new shift
       const result = db.prepare(`
         INSERT INTO time_logs (employee_id, date, clock_in, status, notes)
         VALUES (?, ?, ?, 'clocked_in', ?)
@@ -59,12 +72,14 @@ router.post('/punch', authenticate, (req, res) => {
       return res.json({ message: 'Successfully Clocked In! Have a productive shift.', log: newLog });
     }
 
-    if (!existingLog || existingLog.status === 'clocked_out') {
+    // For break_start, break_end, clock_out: Must have an active or existing log
+    const targetLog = activeLog || existingLog;
+    if (!targetLog || targetLog.status === 'clocked_out') {
       return res.status(400).json({ error: 'You must Clock In first before taking a break or clocking out.' });
     }
 
     if (action === 'break_start') {
-      if (existingLog.status === 'on_break') {
+      if (targetLog.status === 'on_break') {
         return res.status(400).json({ error: 'You are already on break.' });
       }
 
@@ -72,38 +87,38 @@ router.post('/punch', authenticate, (req, res) => {
         UPDATE time_logs
         SET break_start = ?, status = 'on_break', notes = COALESCE(notes || ' | ', '') || 'Started break'
         WHERE id = ?
-      `).run(nowIso, existingLog.id);
+      `).run(nowIso, targetLog.id);
 
-      const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(existingLog.id);
+      const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(targetLog.id);
       return res.json({ message: 'Break / Lunch started. Enjoy your rest!', log: updated });
     }
 
     if (action === 'break_end') {
-      if (existingLog.status !== 'on_break') {
+      if (targetLog.status !== 'on_break') {
         return res.status(400).json({ error: 'You are not currently on break.' });
       }
 
-      const { totalHours, breakMins } = computeHours(existingLog.clock_in, existingLog.break_start, nowIso, null);
+      const { totalHours, breakMins } = computeHours(targetLog.clock_in, targetLog.break_start, nowIso, null);
 
       db.prepare(`
         UPDATE time_logs
         SET break_end = ?, break_duration_mins = ?, status = 'clocked_in', notes = COALESCE(notes || ' | ', '') || 'Ended break'
         WHERE id = ?
-      `).run(nowIso, breakMins, existingLog.id);
+      `).run(nowIso, breakMins, targetLog.id);
 
-      const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(existingLog.id);
+      const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(targetLog.id);
       return res.json({ message: 'Break ended. Welcome back!', log: updated });
     }
 
     if (action === 'clock_out') {
-      let breakEndToUse = existingLog.break_end;
-      if (existingLog.status === 'on_break' && !existingLog.break_end) {
+      let breakEndToUse = targetLog.break_end;
+      if (targetLog.status === 'on_break' && !targetLog.break_end) {
         breakEndToUse = nowIso;
       }
 
       const { totalHours, breakMins, overtimeHours } = computeHours(
-        existingLog.clock_in,
-        existingLog.break_start,
+        targetLog.clock_in,
+        targetLog.break_start,
         breakEndToUse,
         nowIso
       );
@@ -112,9 +127,9 @@ router.post('/punch', authenticate, (req, res) => {
         UPDATE time_logs
         SET clock_out = ?, break_end = COALESCE(break_end, ?), break_duration_mins = ?, total_hours = ?, overtime_hours = ?, status = 'clocked_out', notes = COALESCE(notes || ' | ', '') || 'Clocked out for shift end'
         WHERE id = ?
-      `).run(nowIso, breakEndToUse, breakMins, totalHours, overtimeHours, existingLog.id);
+      `).run(nowIso, breakEndToUse, breakMins, totalHours, overtimeHours, targetLog.id);
 
-      const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(existingLog.id);
+      const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(targetLog.id);
       return res.json({ message: 'Successfully Clocked Out. Great job today!', log: updated });
     }
 
@@ -128,11 +143,23 @@ router.post('/punch', authenticate, (req, res) => {
 // GET /api/timelogs/today (Get logged-in employee's active status)
 router.get('/today', authenticate, (req, res) => {
   try {
-    const employeeId = req.user.employee_id;
-    if (!employeeId) return res.json({ log: null });
+    let employeeId = req.user.employee_id;
+    if (!employeeId) {
+      const emp = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.user.id);
+      if (emp) employeeId = emp.id;
+      else return res.json({ log: null });
+    }
 
     const today = new Date().toISOString().split('T')[0];
-    const log = db.prepare(`
+    
+    // Check for open active shift first (clocked_in or on_break)
+    const openLog = db.prepare(`
+      SELECT * FROM time_logs
+      WHERE employee_id = ? AND status IN ('clocked_in', 'on_break')
+      ORDER BY id DESC LIMIT 1
+    `).get(employeeId);
+
+    const log = openLog || db.prepare(`
       SELECT * FROM time_logs
       WHERE employee_id = ? AND date = ?
       ORDER BY id DESC LIMIT 1

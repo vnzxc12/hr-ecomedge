@@ -185,6 +185,9 @@ router.post('/', authenticate, requireManager, async (req, res) => {
       last_name,
       job_title,
       department,
+      team_id,
+      designation_id,
+      manager_id,
       employment_status,
       employment_type,
       hire_date,
@@ -229,7 +232,7 @@ router.post('/', authenticate, requireManager, async (req, res) => {
     // 2. Auto-generate Password if not provided
     const finalPassword = password ? password.trim() : 'password123';
     const passwordHash = bcrypt.hashSync(finalPassword, 10);
-    const userRole = role === 'manager' ? 'manager' : 'employee';
+    const userRole = (role === 'manager' || role === 'admin') ? 'manager' : 'employee';
 
     // 3. Generate next employee code
     const lastEmp = db.prepare('SELECT id FROM employees ORDER BY id DESC LIMIT 1').get();
@@ -247,6 +250,9 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         last_name: last_name.trim(),
         job_title: job_title.trim(),
         department: department.trim(),
+        team_id: team_id ? parseInt(team_id, 10) : null,
+        designation_id: designation_id ? parseInt(designation_id, 10) : null,
+        manager_id: manager_id ? parseInt(manager_id, 10) : null,
         employment_status: employment_status || 'active',
         employment_type: employment_type || 'full_time',
         hire_date,
@@ -257,7 +263,8 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         emergency_contact_name: emergency_contact_name || null,
         emergency_contact_phone: emergency_contact_phone || null,
         bank_name: bank_name || null,
-        bank_account_number: bank_account_number || null
+        bank_account_number: bank_account_number || null,
+        avatar_url: avatar_url || null
       }).select().single();
 
       if (sbEmpErr) {
@@ -265,7 +272,7 @@ router.post('/', authenticate, requireManager, async (req, res) => {
       } else if (sbEmp) {
         createdEmpId = sbEmp.id;
 
-        // Insert User in Supabase
+        // Insert User in Supabase with chosen role
         const { error: sbUserErr } = await supabase.from('users').insert({
           username: finalUsername,
           password_hash: passwordHash,
@@ -279,9 +286,9 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         await supabase.from('leave_balances').insert({
           employee_id: createdEmpId,
           year: new Date().getFullYear(),
-          vacation_days: 0,
-          sick_days: 0,
-          emergency_days: 0,
+          vacation_days: 15,
+          sick_days: 10,
+          emergency_days: 5,
           vacation_used: 0,
           sick_used: 0,
           emergency_used: 0
@@ -298,16 +305,20 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         const empResult = db.prepare(`
           INSERT INTO employees (
             employee_code, first_name, last_name, job_title, department,
+            team_id, designation_id, manager_id,
             employment_status, employment_type, hire_date, hourly_rate,
             monthly_salary, phone, address, emergency_contact_name,
             emergency_contact_phone, bank_name, bank_account_number, avatar_url
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).run(
           employeeCode,
           first_name.trim(),
           last_name.trim(),
           job_title.trim(),
           department.trim(),
+          team_id ? parseInt(team_id, 10) : null,
+          designation_id ? parseInt(designation_id, 10) : null,
+          manager_id ? parseInt(manager_id, 10) : null,
           employment_status || 'active',
           employment_type || 'full_time',
           hire_date,
@@ -332,7 +343,7 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         const currentYear = new Date().getFullYear();
         db.prepare(`
           INSERT INTO leave_balances (employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
-          VALUES (?, ?, 0, 0, 0, 0, 0, 0)
+          VALUES (?, ?, 15, 10, 5, 0, 0, 0)
         `).run(createdEmpId, currentYear);
       })();
     }
@@ -359,7 +370,7 @@ router.post('/', authenticate, requireManager, async (req, res) => {
   }
 });
 
-// PUT /api/employees/:id (Update employee)
+// PUT /api/employees/:id (Update employee - Manager or Self)
 router.put('/:id', authenticate, (req, res) => {
   try {
     const empId = parseInt(req.params.id, 10);
@@ -380,6 +391,9 @@ router.put('/:id', authenticate, (req, res) => {
       last_name,
       job_title,
       department,
+      team_id,
+      designation_id,
+      manager_id,
       employment_status,
       employment_type,
       hire_date,
@@ -390,7 +404,10 @@ router.put('/:id', authenticate, (req, res) => {
       emergency_contact_name,
       emergency_contact_phone,
       bank_name,
-      bank_account_number
+      bank_account_number,
+      role,
+      password,
+      avatar_url
     } = req.body;
 
     if (isManager) {
@@ -401,6 +418,9 @@ router.put('/:id', authenticate, (req, res) => {
           last_name = COALESCE(?, last_name),
           job_title = COALESCE(?, job_title),
           department = COALESCE(?, department),
+          team_id = ?,
+          designation_id = ?,
+          manager_id = ?,
           employment_status = COALESCE(?, employment_status),
           employment_type = COALESCE(?, employment_type),
           hire_date = COALESCE(?, hire_date),
@@ -412,6 +432,7 @@ router.put('/:id', authenticate, (req, res) => {
           emergency_contact_phone = COALESCE(?, emergency_contact_phone),
           bank_name = COALESCE(?, bank_name),
           bank_account_number = COALESCE(?, bank_account_number),
+          avatar_url = COALESCE(?, avatar_url),
           updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
       `).run(
@@ -419,6 +440,9 @@ router.put('/:id', authenticate, (req, res) => {
         last_name,
         job_title,
         department,
+        team_id !== undefined ? (team_id ? parseInt(team_id, 10) : null) : current.team_id,
+        designation_id !== undefined ? (designation_id ? parseInt(designation_id, 10) : null) : current.designation_id,
+        manager_id !== undefined ? (manager_id ? parseInt(manager_id, 10) : null) : current.manager_id,
         employment_status,
         employment_type,
         hire_date,
@@ -430,10 +454,22 @@ router.put('/:id', authenticate, (req, res) => {
         emergency_contact_phone,
         bank_name,
         bank_account_number,
+        avatar_url,
         empId
       );
+
+      // If manager updated system user role
+      if (role && (role === 'manager' || role === 'employee')) {
+        db.prepare('UPDATE users SET role = ? WHERE employee_id = ?').run(role, empId);
+      }
+
+      // If manager reset password
+      if (password && password.trim()) {
+        const hash = bcrypt.hashSync(password.trim(), 10);
+        db.prepare('UPDATE users SET password_hash = ? WHERE employee_id = ?').run(hash, empId);
+      }
     } else {
-      // Employee can only update contact and bank info
+      // Employee can only update contact, address, and bank info
       db.prepare(`
         UPDATE employees SET
           phone = COALESCE(?, phone),

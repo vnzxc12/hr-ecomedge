@@ -240,7 +240,7 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
               title="Sign Out of Session"
             >
               <LogOut size={15} />
-              <span>Sign Out to Login</span>
+              <span>Sign Out</span>
             </button>
           </div>
         </div>
