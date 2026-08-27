@@ -90,34 +90,28 @@ router.get('/:id', authenticate, (req, res) => {
     const isManager = req.user.role === 'manager';
     const isSelf = req.user.employee_id === empId;
 
-    if (!isManager && !isSelf) {
-      return res.status(403).json({ error: 'Access denied. You can only view your own full profile.' });
-    }
-
-    const employee = db.prepare(`
-      SELECT e.*, 
-             u.id as user_id, u.username, u.role, u.avatar_url,
-             t.name as team_name,
-             d.title as designation_title,
-             m.first_name as manager_first_name, m.last_name as manager_last_name
-      FROM employees e
-      LEFT JOIN users u ON u.employee_id = e.id
-      LEFT JOIN teams t ON e.team_id = t.id
-      LEFT JOIN designations d ON e.designation_id = d.id
-      LEFT JOIN employees m ON e.manager_id = m.id
-      WHERE e.id = ?
-    `).get(empId);
-
     if (!employee) {
       return res.status(404).json({ error: 'Employee not found.' });
     }
 
     const currentYear = new Date().getFullYear();
-    const leaveBalance = db.prepare('SELECT * FROM leave_balances WHERE employee_id = ? AND year = ?').get(empId, currentYear);
-    const recentLogs = db.prepare('SELECT * FROM time_logs WHERE employee_id = ? ORDER BY date DESC, clock_in DESC LIMIT 15').all(empId);
-    const recentLeaves = db.prepare('SELECT * FROM leaves WHERE employee_id = ? ORDER BY created_at DESC').all(empId);
-    const documents = db.prepare('SELECT * FROM documents WHERE employee_id = ? ORDER BY uploaded_at DESC').all(empId);
-    const assets = db.prepare('SELECT * FROM assets WHERE assigned_to = ?').all(empId);
+    const isOwnerOrManager = isManager || isSelf;
+
+    const leaveBalance = isOwnerOrManager
+      ? db.prepare('SELECT * FROM leave_balances WHERE employee_id = ? AND year = ?').get(empId, currentYear)
+      : null;
+    const recentLogs = isOwnerOrManager
+      ? db.prepare('SELECT * FROM time_logs WHERE employee_id = ? ORDER BY date DESC, clock_in DESC LIMIT 15').all(empId)
+      : [];
+    const recentLeaves = isOwnerOrManager
+      ? db.prepare('SELECT * FROM leaves WHERE employee_id = ? ORDER BY created_at DESC').all(empId)
+      : [];
+    const documents = isOwnerOrManager
+      ? db.prepare('SELECT * FROM documents WHERE employee_id = ? ORDER BY uploaded_at DESC').all(empId)
+      : [];
+    const assets = isOwnerOrManager
+      ? db.prepare('SELECT * FROM assets WHERE assigned_to = ?').all(empId)
+      : [];
     const trainings = db.prepare(`
       SELECT tr.*, tp.title, tp.instructor, tp.duration_hours, tp.status as program_status
       FROM training_records tr
@@ -135,34 +129,55 @@ router.get('/:id', authenticate, (req, res) => {
       ORDER BY pa.status ASC, p.name ASC
     `).all(empId);
 
-    const timesheets = db.prepare(`
-      SELECT ts.*, p.name as project_name
-      FROM timesheets ts
-      LEFT JOIN projects p ON ts.project_id = p.id
-      WHERE ts.employee_id = ?
-      ORDER BY ts.date DESC
-      LIMIT 15
-    `).all(empId);
+    const timesheets = isOwnerOrManager
+      ? db.prepare(`
+          SELECT ts.*, p.name as project_name
+          FROM timesheets ts
+          LEFT JOIN projects p ON ts.project_id = p.id
+          WHERE ts.employee_id = ?
+          ORDER BY ts.date DESC
+          LIMIT 15
+        `).all(empId)
+      : [];
 
-    const performanceReviews = db.prepare(`
-      SELECT pr.*, u.username as reviewer_username
-      FROM performance_reviews pr
-      LEFT JOIN users u ON pr.reviewer_id = u.id
-      WHERE pr.employee_id = ?
-      ORDER BY pr.review_date DESC
-    `).all(empId);
+    const performanceReviews = isOwnerOrManager
+      ? db.prepare(`
+          SELECT pr.*, u.username as reviewer_username
+          FROM performance_reviews pr
+          LEFT JOIN users u ON pr.reviewer_id = u.id
+          WHERE pr.employee_id = ?
+          ORDER BY pr.review_date DESC
+        `).all(empId)
+      : [];
 
-    const payslips = db.prepare(`
-      SELECT p.*, pr.period_start, pr.period_end, pr.payroll_code, pr.payment_date
-      FROM payslips p
-      JOIN payrolls pr ON p.payroll_id = pr.id
-      WHERE p.employee_id = ?
-      ORDER BY pr.id DESC
-      LIMIT 12
-    `).all(empId);
+    const payslips = isOwnerOrManager
+      ? db.prepare(`
+          SELECT p.*, pr.period_start, pr.period_end, pr.payroll_code, pr.payment_date
+          FROM payslips p
+          JOIN payrolls pr ON p.payroll_id = pr.id
+          WHERE p.employee_id = ?
+          ORDER BY pr.id DESC
+          LIMIT 12
+        `).all(empId)
+      : [];
+
+    const sanitizedEmployee = isOwnerOrManager ? employee : {
+      id: employee.id,
+      employee_code: employee.employee_code,
+      first_name: employee.first_name,
+      last_name: employee.last_name,
+      job_title: employee.job_title,
+      department: employee.department,
+      team_name: employee.team_name,
+      designation_title: employee.designation_title,
+      avatar_url: employee.avatar_url,
+      phone: employee.phone,
+      employment_status: employee.employment_status,
+      employment_type: employee.employment_type
+    };
 
     res.json({
-      employee,
+      employee: sanitizedEmployee,
       leaveBalance,
       recentLogs,
       recentLeaves,
