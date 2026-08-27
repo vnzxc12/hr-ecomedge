@@ -13,11 +13,11 @@ export default function InstallAppModal({ isOpen, onClose, onNativeInstall, isNa
               width: '38px',
               height: '38px',
               borderRadius: '10px',
-              background: '#e03e1a',
+              background: '#009640',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(224, 62, 26, 0.4)'
+              boxShadow: '0 4px 12px rgba(0, 150, 64, 0.4)'
             }}>
               <Smartphone size={20} color="#ffffff" />
             </div>
@@ -35,8 +35,8 @@ export default function InstallAppModal({ isOpen, onClose, onNativeInstall, isNa
           {isNativeReady && (
             <div style={{
               padding: '1rem 1.25rem',
-              background: 'rgba(224, 62, 26, 0.08)',
-              border: '1px solid rgba(224, 62, 26, 0.25)',
+              background: 'rgba(0, 150, 64, 0.08)',
+              border: '1px solid rgba(0, 150, 64, 0.25)',
               borderRadius: 'var(--radius-md)',
               display: 'flex',
               alignItems: 'center',
@@ -44,11 +44,11 @@ export default function InstallAppModal({ isOpen, onClose, onNativeInstall, isNa
               gap: '1rem'
             }}>
               <div>
-                <div style={{ fontWeight: 800, color: '#e03e1a', fontSize: '0.92rem' }}>Quick One-Click Install</div>
+                <div style={{ fontWeight: 800, color: '#009640', fontSize: '0.92rem' }}>Quick One-Click Install</div>
                 <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Click below to install directly to your device.</div>
               </div>
               <button
-                className="install-app-btn"
+                className="install-app-pill-btn"
                 onClick={() => {
                   if (onNativeInstall) onNativeInstall();
                   onClose();
@@ -66,7 +66,7 @@ export default function InstallAppModal({ isOpen, onClose, onNativeInstall, isNa
             {/* iOS Safari Guide */}
             <div className="install-guide-box">
               <div className="guide-header">
-                <Smartphone size={18} color="#e03e1a" />
+                <Smartphone size={18} color="#009640" />
                 <span>Apple iOS (iPhone / iPad)</span>
               </div>
               <ol className="guide-steps">

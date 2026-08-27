@@ -325,7 +325,7 @@ input, select, textarea {
   gap: 0.85rem;
 }
 
-/* Install Web App Pill Button */
+/* Install Web App Pill Button (EcomEdge Brand Green) */
 .install-app-pill-btn {
   width: 100%;
   display: flex;
@@ -333,22 +333,22 @@ input, select, textarea {
   justify-content: center;
   gap: 0.55rem;
   padding: 0.7rem 1.25rem;
-  background: linear-gradient(135deg, #f0411d 0%, #d82b09 100%);
+  background: linear-gradient(135deg, #009640 0%, #007a33 100%);
   color: #ffffff;
   font-family: var(--font-heading);
   font-size: 0.88rem;
   font-weight: 800;
   letter-spacing: 0.02em;
   border-radius: var(--radius-full);
-  box-shadow: 0 4px 14px rgba(224, 62, 26, 0.4);
+  box-shadow: 0 4px 14px var(--brand-green-glow);
   transition: var(--transition);
   cursor: pointer;
 }
 
 .install-app-pill-btn:hover {
-  background: linear-gradient(135deg, #ff4d29 0%, #e03210 100%);
+  background: linear-gradient(135deg, #00ab49 0%, #008738 100%);
   transform: translateY(-1.5px);
-  box-shadow: 0 6px 18px rgba(224, 62, 26, 0.5);
+  box-shadow: 0 6px 20px rgba(0, 150, 64, 0.45);
 }
 
 .install-app-pill-btn:active {
@@ -390,7 +390,7 @@ input, select, textarea {
 }
 
 .session-zap-icon {
-  color: #f59e0b;
+  color: #00d65b;
   animation: pulseDot 2s infinite;
 }
 
@@ -404,9 +404,9 @@ input, select, textarea {
 }
 
 .session-role-badge.manager {
-  background: rgba(224, 62, 26, 0.18);
-  color: #ff6b4a;
-  border: 1px solid rgba(224, 62, 26, 0.35);
+  background: rgba(0, 150, 64, 0.18);
+  color: #00d65b;
+  border: 1px solid rgba(0, 150, 64, 0.35);
 }
 
 .session-role-badge.employee {
@@ -1224,7 +1224,7 @@ input, select, textarea {
 }
 
 .footer-company {
-  color: #e03e1a;
+  color: var(--brand-green);
   font-weight: 800;
 }
 
