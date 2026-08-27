@@ -203,11 +203,11 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
 
           {/* User Session Card */}
           <div className="sidebar-session-card">
-            {/* Top row: DEMO / LIVE SESSION + Role Badge */}
+            {/* Top row: Status Tag + Role Badge */}
             <div className="session-card-header">
               <div className="session-status-tag">
                 <Zap size={11} className="session-zap-icon" />
-                <span>DEMO SESSION</span>
+                <span>ACTIVE SESSION</span>
               </div>
               <span className={`session-role-badge ${isManager ? 'manager' : 'employee'}`}>
                 {roleLabel}
