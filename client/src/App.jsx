@@ -23,9 +23,14 @@ import Settings from './pages/Settings';
 import Profile from './pages/Profile';
 
 function MainApp() {
-  const { isAuthenticated, loading, isManager } = useAuth();
+  const { user, isAuthenticated, loading, isManager } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Always reset to dashboard when a user logs in or switches accounts
+  useEffect(() => {
+    setActiveTab('dashboard');
+  }, [user?.id]);
 
   if (loading) {
     return (
@@ -59,7 +64,7 @@ function MainApp() {
       case 'dashboard':
         return <Dashboard onNavigate={handleNavigate} />;
       case 'employees':
-        return <Employees />;
+        return isManager ? <Employees /> : <Dashboard onNavigate={handleNavigate} />;
       case 'teams':
         return <Teams />;
       case 'projects':
