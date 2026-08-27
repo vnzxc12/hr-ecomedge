@@ -262,15 +262,12 @@ router.post('/', authenticate, requireManager, async (req, res) => {
     // 4. If Supabase is connected, insert directly into Supabase
     const { supabase, syncFromSupabase } = require('../db/database');
     if (supabase) {
-      const { data: sbEmp, error: sbEmpErr } = await supabase.from('employees').insert({
+      const empPayload = {
         employee_code: employeeCode,
         first_name: first_name.trim(),
         last_name: last_name.trim(),
         job_title: job_title.trim(),
         department: department.trim(),
-        team_id: team_id ? parseInt(team_id, 10) : null,
-        designation_id: designation_id ? parseInt(designation_id, 10) : null,
-        manager_id: manager_id ? parseInt(manager_id, 10) : null,
         employment_status: employment_status || 'active',
         employment_type: employment_type || 'full_time',
         hire_date,
@@ -281,9 +278,10 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         emergency_contact_name: emergency_contact_name || null,
         emergency_contact_phone: emergency_contact_phone || null,
         bank_name: bank_name || null,
-        bank_account_number: bank_account_number || null,
-        avatar_url: avatar_url || null
-      }).select().single();
+        bank_account_number: bank_account_number || null
+      };
+
+      const { data: sbEmp, error: sbEmpErr } = await supabase.from('employees').insert(empPayload).select().single();
 
       if (sbEmpErr) {
         console.error('❌ Supabase employee creation error:', sbEmpErr);

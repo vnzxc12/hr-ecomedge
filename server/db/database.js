@@ -521,10 +521,24 @@ async function syncFromSupabase(force = false) {
 async function pushToSupabase(table, action, data, id) {
   if (!supabase) return;
   try {
+    let cleanData = { ...data };
+    if (table === 'employees') {
+      delete cleanData.avatar_url;
+      delete cleanData.team_id;
+      delete cleanData.designation_id;
+      delete cleanData.manager_id;
+      delete cleanData.team_name;
+      delete cleanData.designation_title;
+      delete cleanData.manager_first_name;
+      delete cleanData.manager_last_name;
+      delete cleanData.user_id;
+      delete cleanData.username;
+      delete cleanData.role;
+    }
     if (action === 'insert') {
-      await supabase.from(table).insert(data);
+      await supabase.from(table).insert(cleanData);
     } else if (action === 'update') {
-      await supabase.from(table).update(data).eq('id', id);
+      await supabase.from(table).update(cleanData).eq('id', id);
     } else if (action === 'delete') {
       await supabase.from(table).delete().eq('id', id);
     }
