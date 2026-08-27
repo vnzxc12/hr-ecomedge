@@ -316,55 +316,194 @@ input, select, textarea {
   color: #00d65b;
 }
 
-.sidebar-footer {
-  padding: 1rem 1.25rem;
+.sidebar-footer-container {
+  padding: 1rem 0.95rem 1.15rem;
   border-top: 1px solid var(--border-color);
-  background: var(--bg-tertiary);
+  background: var(--bg-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+/* Install Web App Pill Button */
+.install-app-pill-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 0.7rem 1.25rem;
+  background: linear-gradient(135deg, #f0411d 0%, #d82b09 100%);
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  border-radius: var(--radius-full);
+  box-shadow: 0 4px 14px rgba(224, 62, 26, 0.4);
+  transition: var(--transition);
+  cursor: pointer;
+}
+
+.install-app-pill-btn:hover {
+  background: linear-gradient(135deg, #ff4d29 0%, #e03210 100%);
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px rgba(224, 62, 26, 0.5);
+}
+
+.install-app-pill-btn:active {
+  transform: translateY(0);
+}
+
+/* Dark Session / User Card */
+.sidebar-session-card {
+  background: #0d1527;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 14px;
+  padding: 0.9rem 0.95rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+[data-theme='dark'] .sidebar-session-card {
+  background: #070d18;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.session-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.user-mini-card {
+.session-status-tag {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+
+.session-zap-icon {
+  color: #f59e0b;
+  animation: pulseDot 2s infinite;
+}
+
+.session-role-badge {
+  font-size: 0.64rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.session-role-badge.manager {
+  background: rgba(224, 62, 26, 0.18);
+  color: #ff6b4a;
+  border: 1px solid rgba(224, 62, 26, 0.35);
+}
+
+.session-role-badge.employee {
+  background: rgba(0, 150, 64, 0.18);
+  color: #00d65b;
+  border: 1px solid rgba(0, 150, 64, 0.35);
+}
+
+.session-card-body {
   display: flex;
   align-items: center;
   gap: 0.75rem;
-  overflow: hidden;
-}
-
-.user-avatar {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-full);
-  background: linear-gradient(135deg, #0A1931 0%, #009640 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 0.9rem;
-  flex-shrink: 0;
-  border: 2px solid var(--bg-secondary);
-  box-shadow: var(--shadow-sm);
-}
-
-.user-info-text {
   min-width: 0;
 }
 
-.user-info-text .name {
-  font-size: 0.88rem;
-  font-weight: 700;
-  color: var(--text-primary);
+.session-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+  color: #ffffff;
+  font-weight: 800;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+
+.session-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.session-user-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.session-user-name {
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: #f8fafc;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
-.user-info-text .role-tag {
-  font-size: 0.72rem;
-  color: var(--brand-green);
-  font-weight: 700;
+.session-user-email {
+  font-size: 0.71rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 1px;
+}
+
+/* Sleek Dark Sign Out Button */
+.sidebar-signout-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  color: #e2e8f0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  transition: var(--transition);
+  cursor: pointer;
+}
+
+.sidebar-signout-btn:hover {
+  background: rgba(220, 38, 38, 0.18);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #fca5a5;
+  transform: translateY(-1px);
+}
+
+.sidebar-close-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-color);
+  cursor: pointer;
 }
 
 /* ==========================================================================
@@ -1038,18 +1177,340 @@ input, select, textarea {
 }
 
 /* ==========================================================================
-   Responsive Utilities
+   Enterprise Bottom Footer
+   ========================================================================== */
+
+.app-footer {
+  margin-top: auto;
+  padding: 1.15rem 2rem;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  transition: var(--transition);
+  flex-shrink: 0;
+  z-index: 10;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.footer-brand {
+  font-family: var(--font-heading);
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.footer-divider {
+  color: var(--border-highlight);
+}
+
+.footer-sub {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.footer-right {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.footer-company {
+  color: #e03e1a;
+  font-weight: 800;
+}
+
+/* ==========================================================================
+   PWA Install Modal & Platform Guides
+   ========================================================================== */
+
+.install-modal-card {
+  max-width: 680px;
+}
+
+.install-guide-box {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem 1.15rem;
+}
+
+.guide-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 800;
+  font-size: 0.85rem;
+  margin-bottom: 0.65rem;
+  color: var(--text-primary);
+}
+
+.guide-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+/* ==========================================================================
+   Navbar Elements & Layout Structure
+   ========================================================================== */
+
+.page-content-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+.navbar-title-container {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.navbar-brand-name {
+  font-size: 0.85rem;
+  color: var(--brand-green);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.navbar-bullet {
+  color: var(--border-highlight);
+}
+
+.navbar-portal-name {
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.navbar-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.35rem 0.75rem;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-color);
+}
+
+.navbar-user-text {
+  line-height: 1.2;
+}
+
+.navbar-user-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.navbar-user-role {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+}
+
+.mobile-menu-btn {
+  display: none;
+}
+
+/* Sidebar Backdrop on Mobile */
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 25, 49, 0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  z-index: 90;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+.sidebar-backdrop.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ==========================================================================
+   Comprehensive Mobile & Tablet Responsiveness
    ========================================================================== */
 
 @media (max-width: 1024px) {
+  .sidebar-backdrop {
+    display: block;
+  }
+
   .sidebar {
     position: fixed;
-    left: -100%;
+    top: 0;
+    left: -320px;
+    height: 100vh;
+    z-index: 100;
+    width: 290px;
+    box-shadow: 0 0 35px rgba(0, 0, 0, 0.4);
+    transition: left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
+
   .sidebar.open {
     left: 0;
   }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .sidebar-close-btn {
+    display: flex;
+  }
+
+  .navbar {
+    padding: 0 1.25rem;
+  }
+
   .page-container {
     padding: 1.25rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .navbar-portal-name {
+    display: none;
+  }
+
+  .navbar-bullet {
+    display: none;
+  }
+
+  .navbar-user-badge {
+    display: none;
+  }
+
+  .punch-ticker-time {
+    display: none;
+  }
+
+  .punch-ticker-pill {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.8rem;
+  }
+
+  .grid-kpi {
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 0.85rem;
+  }
+
+  .stat-card {
+    padding: 1rem 1.15rem;
+  }
+
+  .stat-info .value {
+    font-size: 1.5rem;
+  }
+
+  .modal-backdrop {
+    padding: 0.75rem;
+  }
+
+  .modal-card {
+    max-height: 92vh;
+  }
+
+  .payslip-paper {
+    padding: 1.5rem;
+  }
+
+  .payslip-header {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding: 0.85rem;
+  }
+
+  .app-footer {
+    flex-direction: column;
+    gap: 0.65rem;
+    text-align: center;
+    padding: 1rem;
+  }
+
+  .footer-left {
+    justify-content: center;
+  }
+
+  .footer-right {
+    justify-content: center;
+  }
+
+  .grid-kpi {
+    grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .punch-buttons-group {
+    flex-direction: column;
+    width: 100%;
+  }
+
+  .punch-btn {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .digital-clock-display {
+    font-size: 2.4rem;
+  }
+
+  .payslip-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .table th, .table td {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.82rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .navbar-left {
+    gap: 0.6rem;
+  }
+
+  .navbar-right {
+    gap: 0.5rem;
+  }
+
+  .punch-ticker-label {
+    display: none;
+  }
+
+  .punch-ticker-pill {
+    padding: 0.4rem;
+  }
+
+  .page-container {
+    padding: 0.65rem;
   }
 }

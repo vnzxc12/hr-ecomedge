@@ -70,6 +70,12 @@ function MainApp() {
 
   return (
     <div className="app-layout">
+      {/* Mobile Backdrop Overlay */}
+      <div
+        className={`sidebar-backdrop ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => setSidebarOpen(false)}
+      />
+
       {/* Sidebar Navigation */}
       <Sidebar
         activeTab={activeTab}
@@ -78,12 +84,28 @@ function MainApp() {
           setSidebarOpen(false);
         }}
         isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
       />
 
       {/* Main Content Area */}
       <div className="main-content">
         <Navbar onToggleSidebar={() => setSidebarOpen(prev => !prev)} />
-        <main>{renderContent()}</main>
+        
+        <div className="page-content-wrapper">
+          <main>{renderContent()}</main>
+        </div>
+
+        {/* Enterprise Bottom Footer */}
+        <footer className="app-footer">
+          <div className="footer-left">
+            <span className="footer-brand">EcomEdge HR Management</span>
+            <span className="footer-divider">|</span>
+            <span className="footer-sub">Enterprise Workforce &amp; Payroll v2.6</span>
+          </div>
+          <div className="footer-right">
+            <span>A product by <strong className="footer-company">VCS Technologies</strong></span>
+          </div>
+        </footer>
       </div>
 
       {/* Toast Notifications */}

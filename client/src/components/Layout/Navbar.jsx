@@ -32,8 +32,8 @@ export default function Navbar({ onToggleSidebar }) {
   const status = todayPunch ? todayPunch.status : 'clocked_out';
 
   const getStatusLabel = () => {
-    if (status === 'clocked_in') return 'Working (Clocked In)';
-    if (status === 'on_break') return 'On Lunch / Break';
+    if (status === 'clocked_in') return 'Working (In)';
+    if (status === 'on_break') return 'On Break';
     return 'Clocked Out';
   };
 
@@ -41,16 +41,21 @@ export default function Navbar({ onToggleSidebar }) {
     <>
       <header className="navbar">
         <div className="navbar-left">
-          <button className="btn-icon" onClick={onToggleSidebar} style={{ display: 'none' }} id="mobile-menu-btn">
+          <button
+            className="btn-icon mobile-menu-btn"
+            onClick={onToggleSidebar}
+            aria-label="Open Navigation Menu"
+            id="mobile-menu-btn"
+          >
             <Menu size={20} />
           </button>
           
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            <span style={{ fontSize: '0.85rem', color: 'var(--brand-green)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div className="navbar-title-container">
+            <span className="navbar-brand-name">
               EcomEdge
             </span>
-            <span style={{ color: 'var(--border-highlight)' }}>•</span>
-            <span style={{ fontSize: '0.88rem', fontWeight: '800', color: 'var(--text-primary)' }}>
+            <span className="navbar-bullet">•</span>
+            <span className="navbar-portal-name">
               {isManager ? 'Manager / Executive Command' : 'Employee Self-Service (ESS)'}
             </span>
           </div>
@@ -65,8 +70,8 @@ export default function Navbar({ onToggleSidebar }) {
           >
             <span className={`status-dot ${status}`} />
             <Clock size={15} color="var(--primary)" />
-            <span style={{ fontSize: '0.85rem' }}>{getStatusLabel()}</span>
-            <span style={{ fontSize: '0.75rem', opacity: 0.7, marginLeft: '0.2rem' }}>({liveTimeString})</span>
+            <span className="punch-ticker-label">{getStatusLabel()}</span>
+            <span className="punch-ticker-time">({liveTimeString})</span>
           </div>
 
           {/* Theme Switcher */}
@@ -78,16 +83,8 @@ export default function Navbar({ onToggleSidebar }) {
             {theme === 'dark' ? <Sun size={18} color="#f59e0b" /> : <Moon size={18} color="#6366f1" />}
           </button>
 
-          {/* User Profile Mini Badge */}
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.65rem',
-            padding: '0.35rem 0.75rem',
-            background: 'var(--bg-tertiary)',
-            borderRadius: 'var(--radius-full)',
-            border: '1px solid var(--border-color)'
-          }}>
+          {/* User Profile Mini Badge (Desktop) */}
+          <div className="navbar-user-badge">
             <div className="user-avatar" style={{ width: '32px', height: '32px', fontSize: '0.75rem', overflow: 'hidden' }}>
               {user?.avatar_url ? (
                 <img src={user.avatar_url} alt="Profile" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -95,19 +92,19 @@ export default function Navbar({ onToggleSidebar }) {
                 user?.first_name ? user.first_name[0] : (user?.username ? user.username[0].toUpperCase() : 'U')
               )}
             </div>
-            <div style={{ lineHeight: '1.2' }}>
-              <div style={{ fontSize: '0.82rem', fontWeight: '700' }}>
+            <div className="navbar-user-text">
+              <div className="navbar-user-name">
                 {user?.first_name ? `${user.first_name} ${user.last_name || ''}` : `@${user?.username}`}
               </div>
-              <div style={{ fontSize: '0.7rem', color: isManager ? 'var(--primary)' : 'var(--text-secondary)' }}>
+              <div className="navbar-user-role">
                 {isManager ? 'Manager / Owner' : (user?.job_title || 'Employee')}
               </div>
             </div>
           </div>
 
-          {/* Logout Button */}
+          {/* Quick Logout Button */}
           <button
-            className="btn-icon"
+            className="btn-icon navbar-logout-btn"
             onClick={logout}
             title="Sign Out"
             style={{ color: 'var(--danger)' }}
