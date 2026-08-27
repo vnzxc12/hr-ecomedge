@@ -7,7 +7,7 @@ const { authenticate, requireManager, JWT_SECRET } = require('../middleware/auth
 
 // POST /api/auth/login
 // Strictly Username & Password based (no email required)
-router.post('/login', (req, res) => {
+router.post('/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -16,15 +16,62 @@ router.post('/login', (req, res) => {
     }
 
     const trimmedUsername = username.trim();
+    const { supabase } = require('../db/database');
 
-    // Query user case-insensitively
-    const user = db.prepare(`
+    // 1. Query user case-insensitively from local database
+    let user = db.prepare(`
       SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, u.avatar_url,
              e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.employment_status
       FROM users u
       LEFT JOIN employees e ON u.employee_id = e.id
       WHERE LOWER(u.username) = LOWER(?)
     `).get(trimmedUsername);
+
+    // 2. If user is not found in SQLite (e.g. fresh Vercel serverless cold start), fetch directly from Supabase
+    if (!user && supabase) {
+      const { data: sbUser } = await supabase.from('users').select('*').ilike('username', trimmedUsername).single();
+      if (sbUser) {
+        db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, employee_id, avatar_url) VALUES (?, ?, ?, ?, ?, ?)')
+          .run(sbUser.id, sbUser.username, sbUser.password_hash, sbUser.role || 'employee', sbUser.employee_id || null, sbUser.avatar_url || null);
+
+        if (sbUser.employee_id) {
+          const { data: sbEmp } = await supabase.from('employees').select('*').eq('id', sbUser.employee_id).single();
+          if (sbEmp) {
+            db.prepare(`
+              INSERT OR REPLACE INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number, avatar_url)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `).run(
+              sbEmp.id,
+              sbEmp.employee_code || `EMP-${String(sbEmp.id).padStart(3, '0')}`,
+              sbEmp.first_name,
+              sbEmp.last_name,
+              sbEmp.job_title,
+              sbEmp.department,
+              sbEmp.employment_status || 'active',
+              sbEmp.employment_type || 'full_time',
+              sbEmp.hire_date || '2026-01-01',
+              parseFloat(sbEmp.hourly_rate) || 0,
+              parseFloat(sbEmp.monthly_salary) || 0,
+              sbEmp.phone || null,
+              sbEmp.address || null,
+              sbEmp.emergency_contact_name || null,
+              sbEmp.emergency_contact_phone || null,
+              sbEmp.bank_name || null,
+              sbEmp.bank_account_number || null,
+              sbEmp.avatar_url || null
+            );
+          }
+        }
+
+        user = db.prepare(`
+          SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, u.avatar_url,
+                 e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.employment_status
+          FROM users u
+          LEFT JOIN employees e ON u.employee_id = e.id
+          WHERE LOWER(u.username) = LOWER(?)
+        `).get(trimmedUsername);
+      }
+    }
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid username or password.' });
@@ -35,18 +82,19 @@ router.post('/login', (req, res) => {
     }
 
     let isMatch = false;
+    const trimmedPassword = password.trim();
+
     if (user.password_hash) {
       if (user.password_hash.startsWith('$2a$') || user.password_hash.startsWith('$2b$') || user.password_hash.startsWith('$2y$')) {
-        isMatch = bcrypt.compareSync(password, user.password_hash);
+        isMatch = bcrypt.compareSync(password, user.password_hash) || bcrypt.compareSync(trimmedPassword, user.password_hash);
       } else {
         // Plaintext fallback (e.g. if entered as raw string in database)
-        isMatch = (password === user.password_hash) || (user.username === 'admin' && (password === 'password123' || password === 'admin123'));
+        isMatch = (password === user.password_hash) || (trimmedPassword === user.password_hash) || (user.username === 'admin' && (password === 'password123' || password === 'admin123'));
         if (isMatch) {
-          const newHash = bcrypt.hashSync(password, 10);
+          const newHash = bcrypt.hashSync(trimmedPassword, 10);
           db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, user.id);
-          const { supabase } = require('../db/database');
           if (supabase) {
-            supabase.from('users').update({ password_hash: newHash }).eq('id', user.id).then();
+            await supabase.from('users').update({ password_hash: newHash }).eq('id', user.id);
           }
         }
       }
