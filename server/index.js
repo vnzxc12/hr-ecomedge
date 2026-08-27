@@ -40,10 +40,12 @@ app.get('/api/health', (req, res) => {
 
 const { syncFromSupabase } = require('./db/database');
 
-// Automatic live sync middleware from Supabase
-app.use(async (req, res, next) => {
-  if (req.path.startsWith('/api') && req.path !== '/api/health') {
-    await syncFromSupabase(false).catch(() => {});
+// Non-blocking background sync on cold starts
+let initialSynced = false;
+app.use((req, res, next) => {
+  if (!initialSynced && req.path.startsWith('/api') && req.path !== '/api/health') {
+    initialSynced = true;
+    syncFromSupabase(true).catch(() => {});
   }
   next();
 });

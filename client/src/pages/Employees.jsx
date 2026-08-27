@@ -31,7 +31,8 @@ import {
   ShieldCheck,
   Key,
   Camera,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Loader2
 } from 'lucide-react';
 
 export default function Employees() {
@@ -40,6 +41,12 @@ export default function Employees() {
   const [teams, setTeams] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Loading States for Actions
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDocUploading, setIsDocUploading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Filters
   const [search, setSearch] = useState('');
@@ -58,7 +65,6 @@ export default function Employees() {
   const [showEditModal, setShowEditModal] = useState(false);
   const [showDocUploadModal, setShowDocUploadModal] = useState(false);
   const [editingEmpId, setEditingEmpId] = useState(null);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   // Forms
   const [empForm, setEmpForm] = useState({
@@ -238,6 +244,7 @@ export default function Employees() {
 
   const handleCreateEmployee = async (e) => {
     e.preventDefault();
+    setIsSubmitting(true);
     try {
       await api.employees.create(empForm);
       showToast('Employee created successfully!', 'success');
@@ -269,11 +276,14 @@ export default function Employees() {
       loadEmployees();
     } catch (err) {
       showToast(err.message, 'danger');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleUpdateEmployee = async (e) => {
     e.preventDefault();
+    setIsSaving(true);
     try {
       await api.employees.update(editingEmpId, editForm);
       showToast('Employee updated successfully!', 'success');
@@ -284,6 +294,8 @@ export default function Employees() {
       }
     } catch (err) {
       showToast(err.message, 'danger');
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -293,6 +305,7 @@ export default function Employees() {
       return showToast('Please select a file to upload.', 'warning');
     }
 
+    setIsDocUploading(true);
     try {
       const formData = new FormData();
       formData.append('file', docForm.file);
@@ -310,6 +323,8 @@ export default function Employees() {
       handleSelectEmployee(selectedEmployeeId);
     } catch (err) {
       showToast(err.message, 'danger');
+    } finally {
+      setIsDocUploading(false);
     }
   };
 
@@ -379,7 +394,7 @@ export default function Employees() {
                   }}
                   title="Upload / Change Employee Picture"
                 >
-                  <Camera size={14} />
+                  {uploadingAvatar ? <Loader2 size={14} className="animate-spin" /> : <Camera size={14} />}
                   <input
                     id="profile-header-avatar-upload"
                     type="file"
@@ -1068,8 +1083,16 @@ export default function Employees() {
                 </div>
 
                 <div className="modal-footer">
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
-                  <button type="submit" className="btn btn-primary">Save Changes</button>
+                  <button type="button" className="btn btn-secondary" disabled={isSaving} onClick={() => setShowEditModal(false)}>Cancel</button>
+                  <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                    {isSaving ? (
+                      <>
+                        <Loader2 className="animate-spin" size={16} /> Saving Changes...
+                      </>
+                    ) : (
+                      'Save Changes'
+                    )}
+                  </button>
                 </div>
               </form>
             </div>
@@ -1421,8 +1444,18 @@ export default function Employees() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowAddModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Employee</button>
+                <button type="button" className="btn btn-secondary" disabled={isSubmitting} onClick={() => setShowAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} /> Creating Employee...
+                    </>
+                  ) : (
+                    <>
+                      <Plus size={16} /> Create Employee
+                    </>
+                  )}
+                </button>
               </div>
             </form>
           </div>
@@ -1690,8 +1723,16 @@ export default function Employees() {
               </div>
 
               <div className="modal-footer">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowEditModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Changes</button>
+                <button type="button" className="btn btn-secondary" disabled={isSaving} onClick={() => setShowEditModal(false)}>Cancel</button>
+                <button type="submit" className="btn btn-primary" disabled={isSaving}>
+                  {isSaving ? (
+                    <>
+                      <Loader2 className="animate-spin" size={16} /> Saving Changes...
+                    </>
+                  ) : (
+                    'Save Changes'
+                  )}
+                </button>
               </div>
             </form>
           </div>

@@ -430,7 +430,7 @@ router.post('/', authenticate, requireManager, async (req, res) => {
 });
 
 // PUT /api/employees/:id (Update employee - Manager or Self)
-router.put('/:id', authenticate, (req, res) => {
+router.put('/:id', authenticate, async (req, res) => {
   try {
     const empId = parseInt(req.params.id, 10);
     const isManager = req.user.role === 'manager';
@@ -520,12 +520,29 @@ router.put('/:id', authenticate, (req, res) => {
       // If manager updated system user role
       if (role && (role === 'manager' || role === 'employee')) {
         db.prepare('UPDATE users SET role = ? WHERE employee_id = ?').run(role, empId);
+        const { supabase } = require('../db/database');
+        if (supabase) {
+          await supabase.from('users').update({ role }).eq('employee_id', empId);
+        }
       }
 
       // If manager reset password
       if (password && password.trim()) {
         const hash = bcrypt.hashSync(password.trim(), 10);
         db.prepare('UPDATE users SET password_hash = ? WHERE employee_id = ?').run(hash, empId);
+        const { supabase } = require('../db/database');
+        if (supabase) {
+          await supabase.from('users').update({ password_hash: hash }).eq('employee_id', empId);
+        }
+      }
+
+      // If manager updated avatar
+      if (avatar_url) {
+        db.prepare('UPDATE users SET avatar_url = ? WHERE employee_id = ?').run(avatar_url, empId);
+        const { supabase } = require('../db/database');
+        if (supabase) {
+          await supabase.from('users').update({ avatar_url }).eq('employee_id', empId);
+        }
       }
     } else {
       // Employee can only update contact, address, and bank info
