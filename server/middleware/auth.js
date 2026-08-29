@@ -18,14 +18,14 @@ async function authenticate(req, res, next) {
     const { supabase } = require('../db/database');
     const sessionId = decoded.session_id || req.headers['x-session-id'];
 
-    // 1. If session ID exists, validate active session status & TTL
+    // 1. If session ID exists, validate active session status & 20-min idle timeout
     if (sessionId) {
-      const sessionCheck = sessionService.validateSession(sessionId);
+      const sessionCheck = sessionService.validateSession(sessionId, decoded.id, req);
       if (!sessionCheck.valid) {
         return res.status(401).json({
           error: sessionCheck.reason === 'SESSION_REVOKED'
             ? 'Session has been revoked. Please log in again.'
-            : 'Session expired. Please log in again.',
+            : 'Session expired due to 20 minutes of inactivity. Please log in again.',
           code: sessionCheck.reason
         });
       }

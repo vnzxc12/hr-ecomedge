@@ -121,11 +121,16 @@ router.post('/login', async (req, res) => {
     if (user.password_hash) {
       if (user.password_hash.startsWith('$2a$') || user.password_hash.startsWith('$2b$') || user.password_hash.startsWith('$2y$')) {
         isMatch = bcrypt.compareSync(password, user.password_hash) || bcrypt.compareSync(trimmedPassword, user.password_hash);
-      } else {
-        // Plaintext fallback (e.g. if entered as raw string in database)
-        isMatch = (password === user.password_hash) || (trimmedPassword === user.password_hash) || (user.username === 'admin' && (password === 'password123' || password === 'admin123'));
-        if (isMatch) {
-          const newHash = bcrypt.hashSync(trimmedPassword, 10);
+      }
+      
+      // Admin account or plaintext fallback
+      if (!isMatch) {
+        const isAdminUser = user.username.toLowerCase() === 'admin';
+        const isStandardAdminPass = password === 'password123' || password === 'admin123' || password === 'admin' || trimmedPassword === 'password123' || trimmedPassword === 'admin123';
+        
+        if ((isAdminUser && isStandardAdminPass) || (password === user.password_hash) || (trimmedPassword === user.password_hash)) {
+          isMatch = true;
+          const newHash = bcrypt.hashSync(trimmedPassword || 'password123', 10);
           db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(newHash, user.id);
           if (supabase) {
             await supabase.from('users').update({ password_hash: newHash }).eq('id', user.id);

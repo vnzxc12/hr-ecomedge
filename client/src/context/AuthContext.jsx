@@ -29,7 +29,7 @@ export function AuthProvider({ children }) {
     }, 4000);
   };
 
-  // Load user session
+  // Load user profile on startup
   useEffect(() => {
     async function loadUser() {
       if (!token) {
@@ -39,13 +39,17 @@ export function AuthProvider({ children }) {
 
       try {
         const data = await api.auth.getMe();
-        setUser(data.user);
-        if (data.user?.employee_id) {
-          fetchTodayPunch();
+        if (data && data.user) {
+          setUser(data.user);
+          if (data.user?.employee_id) {
+            fetchTodayPunch();
+          }
         }
       } catch (err) {
-        console.warn('Session expired or invalid:', err.message);
-        logout();
+        console.warn('Session verification notice:', err.message);
+        if (err.message && (err.message.includes('expired') || err.message.includes('revoked') || err.message.includes('401'))) {
+          logout();
+        }
       } finally {
         setLoading(false);
       }
@@ -53,6 +57,33 @@ export function AuthProvider({ children }) {
 
     loadUser();
   }, [token]);
+
+  // 20-Minute Idle Inactivity Watcher (Only expires if completely idle for 20 mins)
+  useEffect(() => {
+    if (!token || !user) return;
+
+    let idleTimer = null;
+    const IDLE_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+
+    const resetIdleTimer = () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        showToast('Session expired due to 20 minutes of inactivity. Please log in again.', 'warning');
+        logout();
+      }, IDLE_TIMEOUT_MS);
+    };
+
+    const events = ['mousemove', 'mousedown', 'keydown', 'scroll', 'touchstart', 'click'];
+    events.forEach(evt => window.addEventListener(evt, resetIdleTimer, { passive: true }));
+
+    // Start timer on initial login/load
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimer) clearTimeout(idleTimer);
+      events.forEach(evt => window.removeEventListener(evt, resetIdleTimer));
+    };
+  }, [token, Boolean(user)]);
 
   const fetchTodayPunch = async () => {
     try {
