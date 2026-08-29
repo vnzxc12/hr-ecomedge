@@ -97,13 +97,36 @@ class SessionService {
 
   /**
    * Validates active session with 20-minute sliding idle timeout
+  /**
+   * Helper to reliably parse timestamps in UTC format across serverless environments
+   */
+  parseTimestamp(str) {
+    if (!str) return Date.now();
+    if (typeof str === 'number') return str;
+    if (typeof str === 'string') {
+      if (!str.endsWith('Z') && !str.includes('+')) {
+        const isoStr = str.replace(' ', 'T') + 'Z';
+        const parsed = new Date(isoStr).getTime();
+        if (!isNaN(parsed) && parsed > 0) return parsed;
+      }
+      const parsed = new Date(str).getTime();
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return Date.now();
+  }
+
+  /**
+   * Validates if a session is still active and within the 20-minute idle window.
    * Resilient to serverless cold starts
    */
   validateSession(sessionId, userId = null, req = null) {
     if (!sessionId) return { valid: true };
 
     const now = Date.now();
-    let session = db.prepare('SELECT * FROM user_sessions WHERE id = ?').get(sessionId);
+    let session = null;
+    try {
+      session = db.prepare('SELECT * FROM user_sessions WHERE id = ?').get(sessionId);
+    } catch (e) {}
 
     // If session is not yet present in SQLite (e.g. freshly spawned Vercel serverless lambda)
     if (!session && userId) {
@@ -111,7 +134,7 @@ class SessionService {
       const expiresIso = new Date(now + this.idleTimeoutMs).toISOString();
       try {
         db.prepare(`
-          INSERT INTO user_sessions (id, user_id, last_active_at, expires_at, is_revoked)
+          INSERT OR REPLACE INTO user_sessions (id, user_id, last_active_at, expires_at, is_revoked)
           VALUES (?, ?, ?, ?, 0)
         `).run(sessionId, userId, nowIso, expiresIso);
       } catch (e) {}
@@ -128,18 +151,12 @@ class SessionService {
       return { valid: false, reason: 'SESSION_REVOKED' };
     }
 
-    // Parse last_active_at safely
-    let lastActive = now;
-    if (session.last_active_at) {
-      const parsed = new Date(session.last_active_at).getTime();
-      if (!isNaN(parsed) && parsed > 0) {
-        lastActive = parsed;
-      }
-    }
+    // Parse timestamps safely in UTC
+    const lastActive = this.parseTimestamp(session.last_active_at);
+    const expiresAt = this.parseTimestamp(session.expires_at);
 
-    const idleTime = now - lastActive;
-
-    if (idleTime > this.idleTimeoutMs) {
+    // Only expire if time is past expiration AND idle time exceeded
+    if (now > expiresAt && (now - lastActive) > this.idleTimeoutMs) {
       try {
         db.prepare('UPDATE user_sessions SET is_revoked = 1 WHERE id = ?').run(sessionId);
       } catch (e) {}
