@@ -20,11 +20,15 @@ export default function Projects() {
   const [isError, setIsError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
-  // Modals
+  // Modals & Edit Selection States
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState(null);
+
   const [showAssignModal, setShowAssignModal] = useState(false);
-  const [showClientModal, setShowClientModal] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [editingClientId, setEditingClientId] = useState(null);
 
   // Forms
   const [projectForm, setProjectForm] = useState({
@@ -37,7 +41,8 @@ export default function Projects() {
     start_date: '',
     end_date: '',
     priority: 'high',
-    budget: ''
+    budget: '',
+    status: 'active'
   });
 
   const [assignForm, setAssignForm] = useState({
@@ -55,7 +60,8 @@ export default function Projects() {
     industry: 'E-Commerce Research & Analytics',
     contact_person: '',
     email: '',
-    phone: ''
+    phone: '',
+    status: 'active'
   });
 
   // Guard query execution until auth is fully resolved
@@ -109,24 +115,55 @@ export default function Projects() {
     }
   };
 
-  const handleCreateProject = async (e) => {
+  // --- Project Handlers ---
+  const handleOpenCreateProject = () => {
+    setEditingProjectId(null);
+    setProjectForm({
+      client_id: '',
+      name: '',
+      project_code: '',
+      description: '',
+      project_manager_id: '',
+      team_id: '',
+      start_date: '',
+      end_date: '',
+      priority: 'high',
+      budget: '',
+      status: 'active'
+    });
+    setShowProjectModal(true);
+  };
+
+  const handleOpenEditProject = (prj) => {
+    setEditingProjectId(prj.id);
+    setProjectForm({
+      client_id: prj.client_id || '',
+      name: prj.name || '',
+      project_code: prj.project_code || '',
+      description: prj.description || '',
+      project_manager_id: prj.project_manager_id || '',
+      team_id: prj.team_id || '',
+      start_date: prj.start_date || '',
+      end_date: prj.end_date || '',
+      priority: prj.priority || 'medium',
+      budget: prj.budget || '',
+      status: prj.status || 'active'
+    });
+    setShowProjectModal(true);
+  };
+
+  const handleSaveProject = async (e) => {
     e.preventDefault();
     try {
-      await api.projects.create(projectForm);
-      showToast('Project created successfully!', 'success');
+      if (editingProjectId) {
+        await api.projects.update(editingProjectId, projectForm);
+        showToast('Project updated successfully!', 'success');
+      } else {
+        await api.projects.create(projectForm);
+        showToast('Project created successfully!', 'success');
+      }
       setShowProjectModal(false);
-      setProjectForm({
-        client_id: '',
-        name: '',
-        project_code: '',
-        description: '',
-        project_manager_id: '',
-        team_id: '',
-        start_date: '',
-        end_date: '',
-        priority: 'high',
-        budget: ''
-      });
+      setEditingProjectId(null);
       loadData();
       window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
@@ -134,6 +171,19 @@ export default function Projects() {
     }
   };
 
+  const handleDeleteProject = async (id, name) => {
+    if (!window.confirm(`Delete project "${name}"? Any staff member assignments will also be deleted.`)) return;
+    try {
+      await api.projects.delete(id);
+      showToast('Project deleted successfully.', 'info');
+      loadData();
+      window.dispatchEvent(new CustomEvent('projects:invalidate'));
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
+  // --- Assign Member Handlers ---
   const handleOpenQuickAssign = (prj) => {
     setSelectedProject(prj);
     setAssignForm({
@@ -205,20 +255,47 @@ export default function Projects() {
     }
   };
 
-  const handleCreateClient = async (e) => {
+  // --- Client Handlers ---
+  const handleOpenCreateClient = () => {
+    setEditingClientId(null);
+    setClientForm({
+      name: '',
+      code: '',
+      industry: 'E-Commerce Research & Analytics',
+      contact_person: '',
+      email: '',
+      phone: '',
+      status: 'active'
+    });
+    setShowClientModal(true);
+  };
+
+  const handleOpenEditClient = (client) => {
+    setEditingClientId(client.id);
+    setClientForm({
+      name: client.name || '',
+      code: client.code || '',
+      industry: client.industry || '',
+      contact_person: client.contact_person || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      status: client.status || 'active'
+    });
+    setShowClientModal(true);
+  };
+
+  const handleSaveClient = async (e) => {
     e.preventDefault();
     try {
-      await api.projects.createClient(clientForm);
-      showToast('Client added successfully!', 'success');
+      if (editingClientId) {
+        await api.projects.updateClient(editingClientId, clientForm);
+        showToast('Client updated successfully!', 'success');
+      } else {
+        await api.projects.createClient(clientForm);
+        showToast('Client added successfully!', 'success');
+      }
       setShowClientModal(false);
-      setClientForm({
-        name: '',
-        code: '',
-        industry: 'E-Commerce Research & Analytics',
-        contact_person: '',
-        email: '',
-        phone: ''
-      });
+      setEditingClientId(null);
       loadData();
       window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
@@ -260,10 +337,10 @@ export default function Projects() {
           </button>
           {isManager && (
             <>
-              <button className="btn btn-secondary" onClick={() => setShowClientModal(true)}>
+              <button className="btn btn-secondary" onClick={handleOpenCreateClient}>
                 <Plus size={15} /> Add Client
               </button>
-              <button className="btn btn-primary" onClick={() => setShowProjectModal(true)}>
+              <button className="btn btn-primary" onClick={handleOpenCreateProject}>
                 <Plus size={15} /> Add Project
               </button>
             </>
@@ -336,7 +413,7 @@ export default function Projects() {
                 Refresh
               </button>
               {isManager && (
-                <button className="btn btn-primary btn-sm" onClick={() => setShowProjectModal(true)}>
+                <button className="btn btn-primary btn-sm" onClick={handleOpenCreateProject}>
                   <Plus size={14} /> Add Project
                 </button>
               )}
@@ -353,9 +430,31 @@ export default function Projects() {
                       <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
                         {prj.client_name || 'Client Account'}
                       </span>
-                      <span className={`badge ${prj.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
-                        {prj.status}
-                      </span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <span className={`badge ${prj.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
+                          {prj.status}
+                        </span>
+                        {isManager && (
+                          <>
+                            <button
+                              className="btn-icon"
+                              onClick={() => handleOpenEditProject(prj)}
+                              title="Edit Project Details"
+                              style={{ width: '26px', height: '26px', color: 'var(--brand-green)' }}
+                            >
+                              <Edit2 size={13} />
+                            </button>
+                            <button
+                              className="btn-icon"
+                              onClick={() => handleDeleteProject(prj.id, prj.name)}
+                              title="Delete Project"
+                              style={{ width: '26px', height: '26px', color: 'var(--danger)' }}
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
@@ -570,7 +669,7 @@ export default function Projects() {
                 Refresh
               </button>
               {isManager && (
-                <button className="btn btn-primary btn-sm" onClick={() => setShowClientModal(true)}>
+                <button className="btn btn-primary btn-sm" onClick={handleOpenCreateClient}>
                   <Plus size={14} /> Add Client
                 </button>
               )}
@@ -583,17 +682,27 @@ export default function Projects() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
                     <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{client.code}</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                       <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{formatPlural(client.project_count || 0, 'Project')}</span>
                       {isManager && (
-                        <button
-                          className="btn-icon"
-                          onClick={() => handleDeleteClient(client.id, client.name)}
-                          title="Delete Client"
-                          style={{ width: '28px', height: '28px', color: 'var(--danger)' }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        <>
+                          <button
+                            className="btn-icon"
+                            onClick={() => handleOpenEditClient(client)}
+                            title="Edit Client Account"
+                            style={{ width: '26px', height: '26px', color: 'var(--brand-green)' }}
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            className="btn-icon"
+                            onClick={() => handleDeleteClient(client.id, client.name)}
+                            title="Delete Client"
+                            style={{ width: '26px', height: '26px', color: 'var(--danger)' }}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
@@ -613,17 +722,19 @@ export default function Projects() {
         )
       )}
 
-      {/* Add Project Modal */}
+      {/* Add / Edit Project Modal */}
       {showProjectModal && (
         <div className="modal-backdrop">
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
             <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontWeight: 800 }}>Create New Client Research Project</h3>
+              <h3 style={{ margin: 0, fontWeight: 800 }}>
+                {editingProjectId ? 'Edit Client Research Project' : 'Create New Client Research Project'}
+              </h3>
               <button type="button" className="btn-icon" onClick={() => setShowProjectModal(false)} title="Close">
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCreateProject}>
+            <form onSubmit={handleSaveProject}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Client *</label>
@@ -692,6 +803,37 @@ export default function Projects() {
 
                 <div className="form-row">
                   <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Priority</label>
+                    <select
+                      className="form-control"
+                      value={projectForm.priority}
+                      onChange={(e) => setProjectForm({ ...projectForm, priority: e.target.value })}
+                    >
+                      <option value="low">Low</option>
+                      <option value="medium">Medium</option>
+                      <option value="high">High</option>
+                      <option value="urgent">Urgent</option>
+                    </select>
+                  </div>
+                  {editingProjectId && (
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Project Status</label>
+                      <select
+                        className="form-control"
+                        value={projectForm.status}
+                        onChange={(e) => setProjectForm({ ...projectForm, status: e.target.value })}
+                      >
+                        <option value="active">Active</option>
+                        <option value="completed">Completed</option>
+                        <option value="on_hold">On Hold</option>
+                        <option value="cancelled">Cancelled</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Start Date</label>
                     <input
                       type="date"
@@ -725,7 +867,9 @@ export default function Projects() {
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowProjectModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Create Project</button>
+                <button type="submit" className="btn btn-primary">
+                  {editingProjectId ? 'Update Project' : 'Create Project'}
+                </button>
               </div>
             </form>
           </div>
@@ -821,17 +965,19 @@ export default function Projects() {
         </div>
       )}
 
-      {/* Add Client Modal */}
+      {/* Add / Edit Client Modal */}
       {showClientModal && (
         <div className="modal-backdrop">
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontWeight: 800 }}>Add Client Account</h3>
+              <h3 style={{ margin: 0, fontWeight: 800 }}>
+                {editingClientId ? 'Edit Client Account' : 'Add Client Account'}
+              </h3>
               <button type="button" className="btn-icon" onClick={() => setShowClientModal(false)} title="Close">
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCreateClient}>
+            <form onSubmit={handleSaveClient}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Client Name *</label>
@@ -890,11 +1036,39 @@ export default function Projects() {
                     />
                   </div>
                 </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Phone</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="+1 (555) 000-0000"
+                      value={clientForm.phone}
+                      onChange={(e) => setClientForm({ ...clientForm, phone: e.target.value })}
+                    />
+                  </div>
+                  {editingClientId && (
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label">Account Status</label>
+                      <select
+                        className="form-control"
+                        value={clientForm.status}
+                        onChange={(e) => setClientForm({ ...clientForm, status: e.target.value })}
+                      >
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowClientModal(false)}>Cancel</button>
-                <button type="submit" className="btn btn-primary">Save Client</button>
+                <button type="submit" className="btn btn-primary">
+                  {editingClientId ? 'Update Client' : 'Save Client'}
+                </button>
               </div>
             </form>
           </div>
