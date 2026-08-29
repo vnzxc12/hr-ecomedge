@@ -4,6 +4,66 @@ const { db, syncFromSupabase, isSupabaseConfigured } = require('../db/database')
 const { authenticate, requireManager } = require('../middleware/auth');
 const { recordAudit } = require('../middleware/auditMiddleware');
 
+// GET /api/payroll/config (Manager get tax & deduction settings)
+router.get('/config', authenticate, requireManager, (req, res) => {
+  try {
+    let config = db.prepare('SELECT * FROM payroll_configs WHERE id = 1').get();
+    if (!config) {
+      db.prepare(`
+        INSERT OR IGNORE INTO payroll_configs (id, tax_rate, social_security_rate, default_allowance, standard_monthly_hours, overtime_multiplier)
+        VALUES (1, 8.0, 4.0, 1500.00, 160.0, 1.5)
+      `).run();
+      config = db.prepare('SELECT * FROM payroll_configs WHERE id = 1').get();
+    }
+    res.json({ config });
+  } catch (err) {
+    console.error('Get payroll config error:', err);
+    res.status(500).json({ error: 'Failed to retrieve payroll configuration.' });
+  }
+});
+
+// PUT /api/payroll/config (Manager update tax & deduction settings)
+router.put('/config', authenticate, requireManager, (req, res) => {
+  try {
+    const { tax_rate, social_security_rate, default_allowance, standard_monthly_hours, overtime_multiplier } = req.body;
+
+    const beforeConfig = db.prepare('SELECT * FROM payroll_configs WHERE id = 1').get();
+
+    db.prepare(`
+      UPDATE payroll_configs
+      SET tax_rate = ?,
+          social_security_rate = ?,
+          default_allowance = ?,
+          standard_monthly_hours = ?,
+          overtime_multiplier = ?,
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = 1
+    `).run(
+      tax_rate !== undefined ? parseFloat(tax_rate) : beforeConfig.tax_rate,
+      social_security_rate !== undefined ? parseFloat(social_security_rate) : beforeConfig.social_security_rate,
+      default_allowance !== undefined ? parseFloat(default_allowance) : beforeConfig.default_allowance,
+      standard_monthly_hours !== undefined ? parseFloat(standard_monthly_hours) : beforeConfig.standard_monthly_hours,
+      overtime_multiplier !== undefined ? parseFloat(overtime_multiplier) : beforeConfig.overtime_multiplier
+    );
+
+    const updatedConfig = db.prepare('SELECT * FROM payroll_configs WHERE id = 1').get();
+
+    recordAudit({
+      req,
+      action: 'PAYROLL_CONFIG_UPDATE',
+      resourceType: 'payroll_config',
+      resourceId: 1,
+      beforeState: beforeConfig,
+      afterState: updatedConfig
+    });
+
+    res.json({ message: 'Payroll tax and deduction settings updated successfully.', config: updatedConfig });
+  } catch (err) {
+    console.error('Update payroll config error:', err);
+    res.status(500).json({ error: 'Failed to update payroll configuration.' });
+  }
+});
+
 // POST /api/payroll/generate (Manager runs automated payroll computation)
 router.post('/generate', authenticate, requireManager, async (req, res) => {
   try {
@@ -25,6 +85,18 @@ router.post('/generate', authenticate, requireManager, async (req, res) => {
     if (employees.length === 0) {
       return res.status(400).json({ error: 'No active employees found to generate payroll.' });
     }
+
+    // Read dynamic tax & deduction configuration
+    let config = db.prepare('SELECT * FROM payroll_configs WHERE id = 1').get();
+    if (!config) {
+      config = { tax_rate: 8.0, social_security_rate: 4.0, default_allowance: 1500.00, standard_monthly_hours: 160.0, overtime_multiplier: 1.5 };
+    }
+
+    const taxRatePct = (config.tax_rate || 8.0) / 100.0;
+    const socialRatePct = (config.social_security_rate || 4.0) / 100.0;
+    const standardMonthlyAllowance = config.default_allowance !== undefined ? config.default_allowance : 1500.00;
+    const standardHoursBenchmark = config.standard_monthly_hours || 160.0;
+    const otMultiplier = config.overtime_multiplier || 1.5;
 
     // Generate unique payroll code
     const countRuns = db.prepare('SELECT COUNT(*) as count FROM payrolls').get().count;
@@ -102,34 +174,29 @@ router.post('/generate', authenticate, requireManager, async (req, res) => {
         const otherDeductions = 0.00;
         let netPay = 0.00;
 
-        // Standard monthly working benchmark is 160.0 hours
-        const standardHoursBenchmark = 160.0;
-        const standardMonthlyAllowance = 1500.00;
-
         // STRICT ATTENDANCE & NO-WORK NO-PAY RULE:
-        // If an employee logged 0 hours and has 0 approved paid leaves, total compensation is ₱0.00
         if (totalHoursWorked > 0) {
           if (emp.hourly_rate > 0) {
             const rate = emp.hourly_rate;
             basicPay = totalCreditedRegularHours * rate;
-            overtimePay = overtimeHours * (rate * 1.5);
+            overtimePay = overtimeHours * (rate * otMultiplier);
             allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
           } else if (emp.monthly_salary > 0) {
             const effectiveHourlyRate = emp.monthly_salary / standardHoursBenchmark;
             const attendanceRatio = Math.min(1.0, totalCreditedRegularHours / standardHoursBenchmark);
             basicPay = attendanceRatio * emp.monthly_salary;
-            overtimePay = overtimeHours * (effectiveHourlyRate * 1.5);
+            overtimePay = overtimeHours * (effectiveHourlyRate * otMultiplier);
             allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
           } else {
             const fallbackRate = 25.00;
             basicPay = totalCreditedRegularHours * fallbackRate;
-            overtimePay = overtimeHours * (fallbackRate * 1.5);
+            overtimePay = overtimeHours * (fallbackRate * otMultiplier);
             allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
           }
 
           grossPay = basicPay + overtimePay + allowances;
-          taxDeduction = grossPay * 0.08; // 8% standard withholding
-          socialDeductions = grossPay * 0.04; // 4% health/social fund
+          taxDeduction = grossPay * taxRatePct;
+          socialDeductions = grossPay * socialRatePct;
           const totalDeductions = taxDeduction + socialDeductions + otherDeductions;
           netPay = Math.max(0, grossPay - totalDeductions);
         }
@@ -250,6 +317,108 @@ router.get('/runs/:id', authenticate, requireManager, (req, res) => {
   } catch (err) {
     console.error('Get payroll run error:', err);
     res.status(500).json({ error: 'Failed to fetch payroll details.' });
+  }
+});
+
+// PUT /api/payroll/payslips/:id (Manager edit individual payslip deductions, taxes, and pay lines)
+router.put('/payslips/:id', authenticate, requireManager, (req, res) => {
+  try {
+    const slipId = parseInt(req.params.id, 10);
+    const existing = db.prepare('SELECT * FROM payslips WHERE id = ?').get(slipId);
+    if (!existing) {
+      return res.status(404).json({ error: 'Payslip not found.' });
+    }
+
+    const payroll = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(existing.payroll_id);
+    if (payroll && payroll.status === 'paid') {
+      return res.status(400).json({ error: 'Cannot modify a payslip from a paid and disbursed payroll run.' });
+    }
+
+    const {
+      basic_pay,
+      overtime_pay,
+      allowances,
+      tax_deduction,
+      social_deductions,
+      other_deductions,
+      total_hours_worked,
+      overtime_hours
+    } = req.body;
+
+    const newBasic = basic_pay !== undefined ? parseFloat(basic_pay) : existing.basic_pay;
+    const newOTPay = overtime_pay !== undefined ? parseFloat(overtime_pay) : existing.overtime_pay;
+    const newAllowances = allowances !== undefined ? parseFloat(allowances) : existing.allowances;
+    const newGross = parseFloat((newBasic + newOTPay + newAllowances).toFixed(2));
+
+    const newTax = tax_deduction !== undefined ? parseFloat(tax_deduction) : existing.tax_deduction;
+    const newSocial = social_deductions !== undefined ? parseFloat(social_deductions) : existing.social_deductions;
+    const newOther = other_deductions !== undefined ? parseFloat(other_deductions) : existing.other_deductions;
+    const newTotalDeductions = parseFloat((newTax + newSocial + newOther).toFixed(2));
+    const newNet = parseFloat(Math.max(0, newGross - newTotalDeductions).toFixed(2));
+
+    const newHours = total_hours_worked !== undefined ? parseFloat(total_hours_worked) : existing.total_hours_worked;
+    const newOTHours = overtime_hours !== undefined ? parseFloat(overtime_hours) : existing.overtime_hours;
+
+    db.transaction(() => {
+      // 1. Update payslip
+      db.prepare(`
+        UPDATE payslips
+        SET basic_pay = ?,
+            overtime_pay = ?,
+            allowances = ?,
+            gross_pay = ?,
+            tax_deduction = ?,
+            social_deductions = ?,
+            other_deductions = ?,
+            net_pay = ?,
+            total_hours_worked = ?,
+            overtime_hours = ?
+        WHERE id = ?
+      `).run(newBasic, newOTPay, newAllowances, newGross, newTax, newSocial, newOther, newNet, newHours, newOTHours, slipId);
+
+      // 2. Recalculate parent payroll run totals
+      const totals = db.prepare(`
+        SELECT 
+          COALESCE(SUM(gross_pay), 0) as sum_gross,
+          COALESCE(SUM(tax_deduction + social_deductions + other_deductions), 0) as sum_deductions,
+          COALESCE(SUM(net_pay), 0) as sum_net
+        FROM payslips
+        WHERE payroll_id = ?
+      `).get(existing.payroll_id);
+
+      db.prepare(`
+        UPDATE payrolls
+        SET total_gross = ?, total_deductions = ?, total_net = ?
+        WHERE id = ?
+      `).run(totals.sum_gross, totals.sum_deductions, totals.sum_net, existing.payroll_id);
+    })();
+
+    const updatedSlip = db.prepare(`
+      SELECT p.*, e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.bank_name, e.bank_account_number
+      FROM payslips p
+      JOIN employees e ON p.employee_id = e.id
+      WHERE p.id = ?
+    `).get(slipId);
+
+    const updatedPayroll = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(existing.payroll_id);
+
+    recordAudit({
+      req,
+      action: 'PAYSLIP_DEDUCTION_UPDATE',
+      resourceType: 'payslip',
+      resourceId: slipId,
+      beforeState: existing,
+      afterState: updatedSlip
+    });
+
+    res.json({
+      message: 'Payslip deductions and earnings updated successfully.',
+      payslip: updatedSlip,
+      payroll: updatedPayroll
+    });
+  } catch (err) {
+    console.error('Update payslip error:', err);
+    res.status(500).json({ error: 'Failed to update payslip.' });
   }
 });
 

@@ -16,7 +16,11 @@ import {
   CreditCard,
   ShieldCheck,
   Trash2,
-  Loader2
+  Loader2,
+  Edit2,
+  Sliders,
+  Percent,
+  Plus
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -34,6 +38,32 @@ export default function Payroll() {
 
   const [showPayslipModal, setShowPayslipModal] = useState(false);
   const [activePayslip, setActivePayslip] = useState(null);
+
+  // Taxes & Deductions Config Modal
+  const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configForm, setConfigForm] = useState({
+    tax_rate: 8.0,
+    social_security_rate: 4.0,
+    default_allowance: 1500.00,
+    standard_monthly_hours: 160.0,
+    overtime_multiplier: 1.5
+  });
+  const [savingConfig, setSavingConfig] = useState(false);
+
+  // Edit Single Payslip Deductions/Pay Modal
+  const [showEditSlipModal, setShowEditSlipModal] = useState(false);
+  const [editingSlip, setEditingSlip] = useState(null);
+  const [slipForm, setSlipForm] = useState({
+    basic_pay: 0,
+    overtime_pay: 0,
+    allowances: 0,
+    tax_deduction: 0,
+    social_deductions: 0,
+    other_deductions: 0,
+    total_hours_worked: 0,
+    overtime_hours: 0
+  });
+  const [savingSlip, setSavingSlip] = useState(false);
 
   // Generate form
   const [periodStart, setPeriodStart] = useState('2026-08-01');
@@ -125,9 +155,77 @@ export default function Payroll() {
     }
   };
 
+  // Open & Save Global Config Modal
+  const handleOpenConfigModal = async () => {
+    try {
+      const res = await api.payroll.getConfig();
+      if (res.config) setConfigForm(res.config);
+      setShowConfigModal(true);
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
+  const handleSaveConfig = async (e) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      const res = await api.payroll.updateConfig(configForm);
+      showToast(res.message, 'success');
+      setShowConfigModal(false);
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  // Open & Save Itemized Payslip Modal
+  const handleOpenEditSlip = (slip) => {
+    setEditingSlip(slip);
+    setSlipForm({
+      basic_pay: slip.basic_pay || 0,
+      overtime_pay: slip.overtime_pay || 0,
+      allowances: slip.allowances || 0,
+      tax_deduction: slip.tax_deduction || 0,
+      social_deductions: slip.social_deductions || 0,
+      other_deductions: slip.other_deductions || 0,
+      total_hours_worked: slip.total_hours_worked || 0,
+      overtime_hours: slip.overtime_hours || 0
+    });
+    setShowEditSlipModal(true);
+  };
+
+  const handleSaveEditSlip = async (e) => {
+    e.preventDefault();
+    setSavingSlip(true);
+    try {
+      const res = await api.payroll.updatePayslip(editingSlip.id, slipForm);
+      showToast(res.message, 'success');
+      setShowEditSlipModal(false);
+
+      // Refresh slips and run in modal
+      if (selectedRun) {
+        const runRes = await api.payroll.getRunById(selectedRun.id);
+        setSelectedRun(runRes.run);
+        setRunSlips(runRes.payslips || []);
+      }
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setSavingSlip(false);
+    }
+  };
+
   const handlePrint = () => {
     window.print();
   };
+
+  // Live computed values for edit slip modal
+  const computedGross = (parseFloat(slipForm.basic_pay) || 0) + (parseFloat(slipForm.overtime_pay) || 0) + (parseFloat(slipForm.allowances) || 0);
+  const computedDeductions = (parseFloat(slipForm.tax_deduction) || 0) + (parseFloat(slipForm.social_deductions) || 0) + (parseFloat(slipForm.other_deductions) || 0);
+  const computedNet = Math.max(0, computedGross - computedDeductions);
 
   return (
     <div className="page-container">
@@ -145,10 +243,16 @@ export default function Payroll() {
         </div>
 
         {isManager && (
-          <button className="btn btn-primary" onClick={() => setShowGenerateModal(true)}>
-            <Calculator size={18} />
-            <span>Generate New Payroll Run</span>
-          </button>
+          <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={handleOpenConfigModal} title="Configure Default Deductions & Taxes">
+              <Sliders size={16} />
+              <span>Tax &amp; Deductions Rates</span>
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowGenerateModal(true)}>
+              <Calculator size={18} />
+              <span>Generate New Payroll Run</span>
+            </button>
+          </div>
         )}
       </div>
 
@@ -176,7 +280,8 @@ export default function Payroll() {
                 {loading ? (
                   <tr>
                     <td colSpan="9" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
-                      Loading payroll batches...
+                      <Loader2 className="animate-spin" size={24} color="var(--brand-green)" style={{ margin: '0 auto 0.5rem' }} />
+                      <div>Loading payroll batches...</div>
                     </td>
                   </tr>
                 ) : runs.length === 0 ? (
@@ -261,7 +366,8 @@ export default function Payroll() {
                 {loading ? (
                   <tr>
                     <td colSpan="11" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
-                      Loading your payslips...
+                      <Loader2 className="animate-spin" size={24} color="var(--brand-green)" style={{ margin: '0 auto 0.5rem' }} />
+                      <div>Loading your payslips...</div>
                     </td>
                   </tr>
                 ) : myPayslips.length === 0 ? (
@@ -287,7 +393,7 @@ export default function Payroll() {
                       <td style={{ color: 'var(--danger)' }}>
                         -₱{(slip.tax_deduction + slip.social_deductions + slip.other_deductions).toLocaleString()}
                       </td>
-                      <td style={{ fontWeight: '800', color: 'var(--success)', fontSize: '0.95rem' }}>
+                      <td style={{ fontWeight: '800', color: 'var(--success)' }}>
                         ₱{slip.net_pay.toLocaleString()}
                       </td>
                       <td>
@@ -297,11 +403,11 @@ export default function Payroll() {
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <button
-                          className="btn btn-primary btn-sm"
+                          className="btn btn-secondary btn-sm"
                           onClick={() => handleViewPayslip(slip.id)}
                         >
                           <Printer size={14} />
-                          <span>Print Slip</span>
+                          <span>View Slip</span>
                         </button>
                       </td>
                     </tr>
@@ -314,15 +420,15 @@ export default function Payroll() {
       )}
 
       {/* ==========================================
-          GENERATE PAYROLL MODAL
+          GENERATE PAYROLL RUN MODAL
           ========================================== */}
       {showGenerateModal && (
         <div className="modal-backdrop" onClick={() => setShowGenerateModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Calculator size={20} color="var(--primary)" />
-                <h3>Generate Automated Payroll Batch (₱)</h3>
+                <h3 style={{ margin: 0, fontWeight: 800 }}>Calculate &amp; Generate Payroll Run</h3>
               </div>
               <button className="btn-icon" onClick={() => setShowGenerateModal(false)}>
                 <X size={18} />
@@ -331,11 +437,11 @@ export default function Payroll() {
 
             <form onSubmit={handleGeneratePayroll}>
               <div className="modal-body">
-                <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
-                  The engine will automatically scan all employee timesheets between the chosen period, compute regular hours, 1.5x overtime rates, allowances, and mandatory withholdings.
+                <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                  Select the compensation cycle date range. The system will calculate basic wages, logged overtime, allowances, and statutory taxes according to active deduction rules.
                 </p>
 
-                <div className="form-group">
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
                   <label className="form-label">Period Start Date *</label>
                   <input
                     type="date"
@@ -372,6 +478,255 @@ export default function Payroll() {
       )}
 
       {/* ==========================================
+          GLOBAL TAX & DEDUCTIONS CONFIG MODAL
+          ========================================== */}
+      {showConfigModal && (
+        <div className="modal-backdrop" onClick={() => setShowConfigModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Sliders size={20} color="var(--brand-green)" />
+                <h3 style={{ margin: 0, fontWeight: 800 }}>Default Tax &amp; Deduction Rates</h3>
+              </div>
+              <button className="btn-icon" onClick={() => setShowConfigModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveConfig}>
+              <div className="modal-body">
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem' }}>
+                  Configure company-wide standard deduction percentages and monthly allowances applied to automated payroll computations.
+                </p>
+
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontWeight: 700 }}>Withholding Tax Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="50"
+                    className="form-control"
+                    value={configForm.tax_rate}
+                    onChange={(e) => setConfigForm({ ...configForm, tax_rate: parseFloat(e.target.value) || 0 })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontWeight: 700 }}>Social Security &amp; Healthcare Contribution Rate (%)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    max="30"
+                    className="form-control"
+                    value={configForm.social_security_rate}
+                    onChange={(e) => setConfigForm({ ...configForm, social_security_rate: parseFloat(e.target.value) || 0 })}
+                    required
+                  />
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '1rem' }}>
+                  <label className="form-label" style={{ fontWeight: 700 }}>Standard Monthly Transport &amp; Meal Allowance (₱)</label>
+                  <input
+                    type="number"
+                    step="50"
+                    min="0"
+                    className="form-control"
+                    value={configForm.default_allowance}
+                    onChange={(e) => setConfigForm({ ...configForm, default_allowance: parseFloat(e.target.value) || 0 })}
+                    required
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 700 }}>Benchmark Monthly Hours</label>
+                    <input
+                      type="number"
+                      step="1"
+                      min="40"
+                      max="300"
+                      className="form-control"
+                      value={configForm.standard_monthly_hours}
+                      onChange={(e) => setConfigForm({ ...configForm, standard_monthly_hours: parseFloat(e.target.value) || 160 })}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontWeight: 700 }}>Overtime Multiplier</label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="1.0"
+                      max="3.0"
+                      className="form-control"
+                      value={configForm.overtime_multiplier}
+                      onChange={(e) => setConfigForm({ ...configForm, overtime_multiplier: parseFloat(e.target.value) || 1.5 })}
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowConfigModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingConfig}>
+                  <CheckCircle2 size={16} />
+                  <span>{savingConfig ? 'Saving...' : 'Save Default Rates'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          EDIT ITEMIZED PAYSLIP DEDUCTIONS & PAY MODAL
+          ========================================== */}
+      {showEditSlipModal && editingSlip && (
+        <div className="modal-backdrop" onClick={() => setShowEditSlipModal(false)}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px' }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <Edit2 size={20} color="var(--brand-green)" />
+                <div>
+                  <h3 style={{ margin: 0, fontWeight: 800 }}>Edit Payslip Deductions &amp; Compensation</h3>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    {editingSlip.first_name} {editingSlip.last_name} ({editingSlip.employee_code})
+                  </div>
+                </div>
+              </div>
+              <button className="btn-icon" onClick={() => setShowEditSlipModal(false)}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSlip}>
+              <div className="modal-body">
+                {/* Earnings breakdown */}
+                <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  1. Gross Earnings (₱)
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Basic Pay (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={slipForm.basic_pay}
+                      onChange={(e) => setSlipForm({ ...slipForm, basic_pay: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Overtime Pay (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={slipForm.overtime_pay}
+                      onChange={(e) => setSlipForm({ ...slipForm, overtime_pay: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Allowances (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={slipForm.allowances}
+                      onChange={(e) => setSlipForm({ ...slipForm, allowances: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+
+                {/* Deductions breakdown */}
+                <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--danger)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  2. Itemized Deductions &amp; Taxes (₱)
+                </h4>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Withholding Tax (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={slipForm.tax_deduction}
+                      onChange={(e) => setSlipForm({ ...slipForm, tax_deduction: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Social / Health (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={slipForm.social_deductions}
+                      onChange={(e) => setSlipForm({ ...slipForm, social_deductions: parseFloat(e.target.value) || 0 })}
+                      required
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label" style={{ fontSize: '0.75rem' }}>Other Deductions (₱)</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      className="form-control"
+                      value={slipForm.other_deductions}
+                      onChange={(e) => setSlipForm({ ...slipForm, other_deductions: parseFloat(e.target.value) || 0 })}
+                      placeholder="e.g. loans / advances"
+                    />
+                  </div>
+                </div>
+
+                {/* Live Computed Summary Banner */}
+                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '0.85rem 1.25rem', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '1rem', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Gross Earnings</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>₱{computedGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--danger)' }}>Total Deductions</div>
+                    <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--danger)' }}>-₱{computedDeductions.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--success)' }}>Net Take-Home Pay</div>
+                    <div style={{ fontWeight: 900, fontSize: '1.2rem', color: 'var(--success)' }}>₱{computedNet.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowEditSlipModal(false)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={savingSlip}>
+                  <CheckCircle2 size={16} />
+                  <span>{savingSlip ? 'Saving...' : 'Save & Recalculate Slip'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
           RUN DETAILS & PAYSLIP LIST MODAL (Manager)
           ========================================== */}
       {showRunDetailModal && selectedRun && (
@@ -381,8 +736,8 @@ export default function Payroll() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <Banknote size={22} color="var(--primary)" />
                 <div>
-                  <h3>Payroll Batch: {selectedRun.payroll_code}</h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  <h3 style={{ margin: 0 }}>Payroll Batch: {selectedRun.payroll_code}</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
                     Period: {selectedRun.period_start} ~ {selectedRun.period_end} • Status: <span className={`badge badge-${selectedRun.status === 'paid' ? 'success' : 'warning'}`}>{selectedRun.status}</span>
                   </p>
                 </div>
@@ -394,7 +749,7 @@ export default function Payroll() {
 
             <div className="modal-body">
               {/* Batch Actions Bar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
                 <div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Net Disbursement Total</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--success)' }}>
@@ -410,7 +765,7 @@ export default function Payroll() {
                   )}
                   {selectedRun.status === 'approved' && (
                     <button className="btn btn-success btn-sm" onClick={() => handleUpdateStatus(selectedRun.id, 'paid')}>
-                      Mark as Paid & Disbursed
+                      Mark as Paid &amp; Disbursed
                     </button>
                   )}
                 </div>
@@ -429,7 +784,7 @@ export default function Payroll() {
                       <th>Gross</th>
                       <th>Deductions</th>
                       <th>Net Pay</th>
-                      <th style={{ textAlign: 'right' }}>Slip</th>
+                      <th style={{ textAlign: 'right' }}>Slip / Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -455,9 +810,21 @@ export default function Payroll() {
                           ₱{(slip.net_pay || 0).toLocaleString()}
                         </td>
                         <td style={{ textAlign: 'right' }}>
-                          <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)}>
-                            <Printer size={14} />
-                          </button>
+                          <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            {selectedRun.status === 'draft' && (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => handleOpenEditSlip(slip)}
+                                title="Edit Deductions, Taxes & Pay"
+                              >
+                                <Edit2 size={13} />
+                                <span>Edit</span>
+                              </button>
+                            )}
+                            <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)} title="Print Payslip">
+                              <Printer size={14} />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -520,88 +887,115 @@ export default function Payroll() {
                   </div>
 
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: '800', color: '#0A1931' }}>OFFICIAL PAYSLIP</div>
-                    <div style={{ fontSize: '0.8rem', color: '#475569' }}>
-                      Period: {activePayslip.period_start} to {activePayslip.period_end}
+                    <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0A1931' }}>PAYSLIP VOUCHER</div>
+                    <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+                      Period: {activePayslip.period_start} ~ {activePayslip.period_end}
                     </div>
-                    <div style={{ fontSize: '0.8rem', color: '#009640', fontWeight: '700', marginTop: '0.2rem' }}>
-                      Status: {activePayslip.payment_status?.toUpperCase()}
+                    <div style={{ fontSize: '0.82rem', color: '#009640', fontWeight: '700' }}>
+                      Disbursed: {activePayslip.payment_date || 'Pending Processing'}
                     </div>
                   </div>
                 </div>
 
-                {/* Employee Information */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '6px', marginBottom: '1.5rem', border: '1px solid #e2e8f0', fontSize: '0.85rem' }}>
+                {/* Employee Meta Grid */}
+                <div className="payslip-employee-grid">
                   <div>
-                    <div><strong>Employee Name:</strong> {activePayslip.first_name} {activePayslip.last_name}</div>
-                    <div><strong>Employee Code:</strong> {activePayslip.employee_code}</div>
-                    <div><strong>Department:</strong> {activePayslip.department}</div>
+                    <div className="meta-label">Employee Name</div>
+                    <div className="meta-val">{activePayslip.first_name} {activePayslip.last_name}</div>
                   </div>
                   <div>
-                    <div><strong>Job Title:</strong> {activePayslip.job_title}</div>
-                    <div><strong>Bank:</strong> {activePayslip.bank_name || 'BDO / Direct Deposit'}</div>
-                    <div><strong>Account No:</strong> {activePayslip.bank_account_number || '**** 0000'}</div>
+                    <div className="meta-label">Employee Code</div>
+                    <div className="meta-val">{activePayslip.employee_code}</div>
+                  </div>
+                  <div>
+                    <div className="meta-label">Department / Team</div>
+                    <div className="meta-val">{activePayslip.department}</div>
+                  </div>
+                  <div>
+                    <div className="meta-label">Designation</div>
+                    <div className="meta-val">{activePayslip.job_title}</div>
+                  </div>
+                  <div>
+                    <div className="meta-label">Bank Account</div>
+                    <div className="meta-val">{activePayslip.bank_name || 'BDO'} - {activePayslip.bank_account_number || '**** ****'}</div>
+                  </div>
+                  <div>
+                    <div className="meta-label">Hours Logged</div>
+                    <div className="meta-val">{activePayslip.total_hours_worked || 0} hrs</div>
                   </div>
                 </div>
 
-                {/* Earnings & Deductions Grid */}
-                <div className="payslip-grid">
-                  {/* Earnings Box */}
-                  <div className="payslip-box">
-                    <h4>Earnings (PHP ₱)</h4>
-                    <div className="payslip-line">
-                      <span>Basic Pay ({activePayslip.total_hours_worked || 160} hrs)</span>
-                      <span>₱{activePayslip.basic_pay.toLocaleString()}</span>
-                    </div>
-                    <div className="payslip-line">
-                      <span>Overtime Pay ({activePayslip.overtime_hours || 0} hrs @ 1.5x)</span>
-                      <span>₱{activePayslip.overtime_pay.toLocaleString()}</span>
-                    </div>
-                    <div className="payslip-line">
-                      <span>Meal & Transport Allowance</span>
-                      <span>₱{activePayslip.allowances.toLocaleString()}</span>
-                    </div>
-                    <div className="payslip-line payslip-total">
-                      <span>Gross Earnings</span>
-                      <span>₱{activePayslip.gross_pay.toLocaleString()}</span>
-                    </div>
+                {/* Earnings & Deductions Tables */}
+                <div className="payslip-tables-grid">
+                  {/* Earnings */}
+                  <div>
+                    <div className="table-heading">Earnings (PHP ₱)</div>
+                    <table className="slip-table">
+                      <tbody>
+                        <tr>
+                          <td>Basic Compensation</td>
+                          <td style={{ textAlign: 'right', fontWeight: '600' }}>₱{activePayslip.basic_pay.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td>Overtime Pay ({activePayslip.overtime_hours || 0} hrs)</td>
+                          <td style={{ textAlign: 'right', fontWeight: '600' }}>₱{activePayslip.overtime_pay.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td>Transport &amp; Meal Allowance</td>
+                          <td style={{ textAlign: 'right', fontWeight: '600' }}>₱{activePayslip.allowances.toLocaleString()}</td>
+                        </tr>
+                        <tr className="total-row">
+                          <td><strong>Gross Pay</strong></td>
+                          <td style={{ textAlign: 'right', fontWeight: '800' }}>₱{activePayslip.gross_pay.toLocaleString()}</td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
 
-                  {/* Deductions Box */}
-                  <div className="payslip-box">
-                    <h4>Deductions (PHP ₱)</h4>
-                    <div className="payslip-line">
-                      <span>Withholding Tax (8%)</span>
-                      <span>₱{activePayslip.tax_deduction.toLocaleString()}</span>
-                    </div>
-                    <div className="payslip-line">
-                      <span>SSS / PhilHealth / Pag-IBIG (4%)</span>
-                      <span>₱{activePayslip.social_deductions.toLocaleString()}</span>
-                    </div>
-                    <div className="payslip-line">
-                      <span>Other Deductions</span>
-                      <span>₱{activePayslip.other_deductions.toLocaleString()}</span>
-                    </div>
-                    <div className="payslip-line payslip-total" style={{ color: '#dc2626' }}>
-                      <span>Total Deductions</span>
-                      <span>-₱{(activePayslip.tax_deduction + activePayslip.social_deductions + activePayslip.other_deductions).toLocaleString()}</span>
-                    </div>
+                  {/* Deductions */}
+                  <div>
+                    <div className="table-heading">Deductions (PHP ₱)</div>
+                    <table className="slip-table">
+                      <tbody>
+                        <tr>
+                          <td>Withholding Tax</td>
+                          <td style={{ textAlign: 'right', color: '#ef4444' }}>-₱{activePayslip.tax_deduction.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td>SSS / PhilHealth / HDMF</td>
+                          <td style={{ textAlign: 'right', color: '#ef4444' }}>-₱{activePayslip.social_deductions.toLocaleString()}</td>
+                        </tr>
+                        <tr>
+                          <td>Other Deductions</td>
+                          <td style={{ textAlign: 'right', color: '#ef4444' }}>-₱{activePayslip.other_deductions.toLocaleString()}</td>
+                        </tr>
+                        <tr className="total-row">
+                          <td><strong>Total Deductions</strong></td>
+                          <td style={{ textAlign: 'right', fontWeight: '800', color: '#ef4444' }}>
+                            -₱{(activePayslip.tax_deduction + activePayslip.social_deductions + activePayslip.other_deductions).toLocaleString()}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
                   </div>
                 </div>
 
                 {/* Net Pay Banner */}
-                <div className="net-pay-banner">
+                <div className="payslip-net-banner">
                   <div>
-                    <div style={{ fontSize: '0.85rem', fontWeight: '700' }}>NET TAKE-HOME PAY</div>
-                    <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>Credited to Philippine Bank Account</div>
+                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>
+                      Net Take-Home Pay (Disbursed in PHP)
+                    </div>
+                    <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#009640' }}>
+                      ₱{activePayslip.net_pay.toLocaleString()}
+                    </div>
                   </div>
-                  <div className="amount">
-                    ₱{activePayslip.net_pay.toLocaleString()}
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#009640', fontWeight: '700', fontSize: '0.85rem' }}>
+                      <CheckCircle2 size={16} /> Verified by System
+                    </div>
+                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Ecomedge Digital Seal</div>
                   </div>
-                </div>
-
-                <div style={{ marginTop: '2rem', textAlign: 'center', fontSize: '0.75rem', color: '#94a3b8', borderTop: '1px solid #e2e8f0', paddingTop: '1rem' }}>
-                  This document is an official electronic payslip generated by ECOMEDGE Research and Analysis Services HR System.
                 </div>
               </div>
             </div>
@@ -609,10 +1003,6 @@ export default function Payroll() {
             <div className="modal-footer" style={{ background: '#ffffff' }}>
               <button className="btn btn-secondary" onClick={() => setShowPayslipModal(false)}>
                 Close
-              </button>
-              <button className="btn btn-primary" onClick={handlePrint}>
-                <Printer size={16} />
-                <span>Print Payslip</span>
               </button>
             </div>
           </div>

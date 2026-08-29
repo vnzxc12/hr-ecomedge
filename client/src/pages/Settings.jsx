@@ -16,17 +16,31 @@ import {
   CheckCircle2,
   XCircle,
   Clock,
-  Laptop
+  Laptop,
+  Percent,
+  Banknote,
+  Calculator,
+  Sliders
 } from 'lucide-react';
 
 export default function Settings() {
   const { isManager, showToast } = useAuth();
-  const [activeTab, setActiveTab] = useState('designations'); // 'designations', 'system_audit', 'auth_audit'
+  const [activeTab, setActiveTab] = useState('designations'); // 'designations', 'payroll_config', 'system_audit', 'auth_audit'
   const [designations, setDesignations] = useState([]);
   const [systemLogs, setSystemLogs] = useState([]);
   const [authLogs, setAuthLogs] = useState([]);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // Payroll Tax & Deduction Config State
+  const [payrollConfig, setPayrollConfig] = useState({
+    tax_rate: 8.0,
+    social_security_rate: 4.0,
+    default_allowance: 1500.00,
+    standard_monthly_hours: 160.0,
+    overtime_multiplier: 1.5
+  });
+  const [savingConfig, setSavingConfig] = useState(false);
 
   // Pagination states
   const [nextCursor, setNextCursor] = useState(null);
@@ -71,6 +85,9 @@ export default function Settings() {
       if (activeTab === 'designations') {
         const res = await api.teams.getDesignations();
         setDesignations(res.designations || []);
+      } else if (activeTab === 'payroll_config') {
+        const res = await api.payroll.getConfig();
+        if (res.config) setPayrollConfig(res.config);
       } else if (activeTab === 'system_audit') {
         const res = await api.audit.getSystem({ limit: 25, cursor: reset ? '' : nextCursor, search: auditSearch });
         const list = res.items || res.logs || [];
@@ -97,6 +114,20 @@ export default function Settings() {
     } finally {
       setLoading(false);
       setLoadingMore(false);
+    }
+  };
+
+  const handleSavePayrollConfig = async (e) => {
+    e.preventDefault();
+    setSavingConfig(true);
+    try {
+      const res = await api.payroll.updateConfig(payrollConfig);
+      showToast(res.message, 'success');
+      if (res.config) setPayrollConfig(res.config);
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setSavingConfig(false);
     }
   };
 
@@ -214,6 +245,12 @@ export default function Settings() {
           <Shield size={16} /> Job Designations ({designations.length})
         </button>
         <button
+          className={`subtab-btn ${activeTab === 'payroll_config' ? 'active' : ''}`}
+          onClick={() => setActiveTab('payroll_config')}
+        >
+          <Percent size={16} /> Taxes &amp; Deductions Rules
+        </button>
+        <button
           className={`subtab-btn ${activeTab === 'system_audit' ? 'active' : ''}`}
           onClick={() => setActiveTab('system_audit')}
         >
@@ -229,6 +266,156 @@ export default function Settings() {
 
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading records...</div>
+      ) : activeTab === 'payroll_config' ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1.2fr) minmax(280px, 0.8fr)', gap: '1.5rem', alignItems: 'start' }}>
+          {/* Settings Form */}
+          <div className="glass-card">
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <Sliders size={18} color="var(--brand-green)" /> Statutory Deductions &amp; Tax Configuration
+            </h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.82rem', marginBottom: '1.25rem' }}>
+              Define standard tax withholding percentages, statutory health/social contributions, and default allowances applied during automated payroll calculation.
+            </p>
+
+            <form onSubmit={handleSavePayrollConfig}>
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                  <span>Withholding Tax Rate (%)</span>
+                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>{payrollConfig.tax_rate}%</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="50"
+                  className="form-control"
+                  value={payrollConfig.tax_rate}
+                  onChange={(e) => setPayrollConfig({ ...payrollConfig, tax_rate: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Standard withholding tax percentage deducted from gross taxable compensation.</small>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                  <span>Social Security &amp; Healthcare Contribution Rate (%)</span>
+                  <span style={{ color: 'var(--primary)', fontWeight: 800 }}>{payrollConfig.social_security_rate}%</span>
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  max="30"
+                  className="form-control"
+                  value={payrollConfig.social_security_rate}
+                  onChange={(e) => setPayrollConfig({ ...payrollConfig, social_security_rate: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Combined SSS, PhilHealth, and HDMF / Pag-IBIG statutory fund deduction rate.</small>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: '1.2rem' }}>
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                  <span>Standard Monthly Transport &amp; Meal Allowance (₱)</span>
+                  <span style={{ color: 'var(--brand-green)', fontWeight: 800 }}>₱{Number(payrollConfig.default_allowance || 0).toLocaleString()}</span>
+                </label>
+                <input
+                  type="number"
+                  step="50"
+                  min="0"
+                  className="form-control"
+                  value={payrollConfig.default_allowance}
+                  onChange={(e) => setPayrollConfig({ ...payrollConfig, default_allowance: parseFloat(e.target.value) || 0 })}
+                  required
+                />
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Fixed non-taxable monthly travel &amp; meal stipend (prorated by attendance hours).</small>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700 }}>Monthly Benchmark Hours</label>
+                  <input
+                    type="number"
+                    step="1"
+                    min="40"
+                    max="300"
+                    className="form-control"
+                    value={payrollConfig.standard_monthly_hours}
+                    onChange={(e) => setPayrollConfig({ ...payrollConfig, standard_monthly_hours: parseFloat(e.target.value) || 160 })}
+                    required
+                  />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Standard full-time benchmark (default 160 hrs).</small>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label" style={{ fontWeight: 700 }}>Overtime Multiplier</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    min="1.0"
+                    max="3.0"
+                    className="form-control"
+                    value={payrollConfig.overtime_multiplier}
+                    onChange={(e) => setPayrollConfig({ ...payrollConfig, overtime_multiplier: parseFloat(e.target.value) || 1.5 })}
+                    required
+                  />
+                  <small style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>Overtime hourly premium (e.g. 1.5x regular rate).</small>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                <button type="submit" className="btn btn-primary" disabled={savingConfig}>
+                  <CheckCircle2 size={16} />
+                  <span>{savingConfig ? 'Saving Changes...' : 'Save Deduction & Tax Rules'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+
+          {/* Real-time Calculation Simulator Card */}
+          <div className="glass-card" style={{ background: 'linear-gradient(135deg, rgba(10, 25, 49, 0.04) 0%, rgba(0, 150, 64, 0.05) 100%)' }}>
+            <h3 style={{ fontSize: '1rem', fontWeight: 800, marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+              <Calculator size={18} color="var(--brand-green)" /> Live Computation Simulation
+            </h3>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: '1rem' }}>
+              Example preview for a full-time employee with ₱20,000 basic salary (160 hours worked):
+            </p>
+
+            <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '1rem', border: '1px solid var(--border-color)' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.84rem' }}>
+                <span>Basic Salary (160 hrs):</span>
+                <strong>₱20,000.00</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.84rem', color: 'var(--brand-green)' }}>
+                <span>Allowances:</span>
+                <strong>+₱{Number(payrollConfig.default_allowance || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.88rem', fontWeight: 700, borderTop: '1px dashed var(--border-color)', paddingTop: '0.4rem' }}>
+                <span>Gross Compensation:</span>
+                <span>₱{(20000 + Number(payrollConfig.default_allowance || 0)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.4rem', fontSize: '0.84rem', color: 'var(--danger)' }}>
+                <span>Withholding Tax ({payrollConfig.tax_rate}%):</span>
+                <span>-₱{((20000 + Number(payrollConfig.default_allowance || 0)) * (payrollConfig.tax_rate / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.6rem', fontSize: '0.84rem', color: 'var(--danger)' }}>
+                <span>Social / Healthcare ({payrollConfig.social_security_rate}%):</span>
+                <span>-₱{((20000 + Number(payrollConfig.default_allowance || 0)) * (payrollConfig.social_security_rate / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '2px solid var(--border-color)', fontSize: '1rem', fontWeight: 900, color: 'var(--success)' }}>
+                <span>Estimated Net Pay:</span>
+                <span>
+                  ₱{(
+                    (20000 + Number(payrollConfig.default_allowance || 0)) -
+                    ((20000 + Number(payrollConfig.default_allowance || 0)) * ((payrollConfig.tax_rate + payrollConfig.social_security_rate) / 100))
+                  ).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       ) : activeTab === 'designations' ? (
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
           <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>

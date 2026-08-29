@@ -101,7 +101,7 @@ export default function Sidebar({ activeTab, onSelectTab, isOpen, onClose }) {
       title: 'Reports & Admin',
       items: [
         { id: 'reports', label: 'Enterprise Reports', icon: BarChart3 },
-        { id: 'settings', label: 'Designations & Roles', icon: Settings },
+        { id: 'settings', label: 'System Governance & Logs', icon: Settings },
       ]
     }
   ] : [

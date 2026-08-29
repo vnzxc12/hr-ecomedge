@@ -173,6 +173,20 @@ function initSchema() {
       FOREIGN KEY (employee_id) REFERENCES employees(id) ON DELETE CASCADE
     );
 
+    -- 7b. Payroll Tax & Deduction Configuration
+    CREATE TABLE IF NOT EXISTS payroll_configs (
+      id INTEGER PRIMARY KEY,
+      tax_rate REAL NOT NULL DEFAULT 8.0,
+      social_security_rate REAL NOT NULL DEFAULT 4.0,
+      default_allowance REAL NOT NULL DEFAULT 1500.00,
+      standard_monthly_hours REAL NOT NULL DEFAULT 160.0,
+      overtime_multiplier REAL NOT NULL DEFAULT 1.5,
+      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    );
+
+    INSERT OR IGNORE INTO payroll_configs (id, tax_rate, social_security_rate, default_allowance, standard_monthly_hours, overtime_multiplier)
+    VALUES (1, 8.0, 4.0, 1500.00, 160.0, 1.5);
+
     -- 8. Documents Table
     CREATE TABLE IF NOT EXISTS documents (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

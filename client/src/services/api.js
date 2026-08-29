@@ -149,7 +149,16 @@ export const api = {
       body: JSON.stringify({ status })
     }),
     getMyPayslips: () => request('/payroll/my-payslips'),
-    getPayslipById: (id) => request(`/payroll/payslip/${id}`)
+    getPayslipById: (id) => request(`/payroll/payslip/${id}`),
+    getConfig: () => request('/payroll/config'),
+    updateConfig: (data) => request('/payroll/config', {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    updatePayslip: (id, data) => request(`/payroll/payslips/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
   },
 
   // Documents
