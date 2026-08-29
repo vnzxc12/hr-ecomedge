@@ -1038,6 +1038,14 @@ input, select, textarea {
   max-width: 900px;
 }
 
+.modal-card.modal-xl {
+  max-width: 1240px;
+}
+
+.modal-card.modal-2xl {
+  max-width: 1440px;
+}
+
 .modal-card form {
   display: flex;
   flex-direction: column;

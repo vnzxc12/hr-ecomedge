@@ -588,8 +588,8 @@ export default function Payroll() {
           RUN DETAILS & PAYSLIP LIST MODAL (Manager)
           ========================================== */}
       {showRunDetailModal && selectedRun && (
-        <div className="modal-backdrop" style={{ zIndex: 1000 }}>
-          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1001 }}>
+        <div className="modal-backdrop" style={{ zIndex: 1000, padding: '1rem' }}>
+          <div className="modal-card modal-xl" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1001, maxWidth: '1240px', width: '96vw' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <Banknote size={22} color="var(--primary)" />
@@ -611,7 +611,7 @@ export default function Payroll() {
                 <div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Net Disbursement Total</div>
                   <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--success)' }}>
-                    ₱{(selectedRun.total_net || 0).toLocaleString()}
+                    ₱{(selectedRun.total_net || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </div>
                 </div>
 
@@ -631,43 +631,43 @@ export default function Payroll() {
 
               {/* Slips table */}
               <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
+                <table className="table" style={{ width: '100%' }}>
                   <thead>
                     <tr>
-                      <th>Employee</th>
-                      <th>Logged Hours</th>
-                      <th>Basic Pay</th>
-                      <th>Overtime</th>
-                      <th>Allowances</th>
-                      <th>Gross</th>
-                      <th>Deductions</th>
-                      <th>Net Pay</th>
-                      <th style={{ textAlign: 'right' }}>Slip / Actions</th>
+                      <th style={{ minWidth: '160px' }}>Employee</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Logged Hours</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Basic Pay</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Overtime</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Allowances</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Gross</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Deductions</th>
+                      <th style={{ whiteSpace: 'nowrap' }}>Net Pay</th>
+                      <th style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>Slip / Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {runSlips.map((slip) => (
                       <tr key={slip.id}>
                         <td>
-                          <div style={{ fontWeight: '700' }}>{slip.first_name} {slip.last_name}</div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{slip.employee_code} • {slip.department}</div>
+                          <div style={{ fontWeight: '700', whiteSpace: 'nowrap' }}>{slip.first_name} {slip.last_name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{slip.employee_code} • {slip.department}</div>
                         </td>
-                        <td>
+                        <td style={{ whiteSpace: 'nowrap' }}>
                           <span style={{ fontWeight: 700, color: (slip.total_hours_worked || 0) > 0 ? 'var(--brand-green)' : 'var(--text-muted)' }}>
-                            {slip.total_hours_worked || 0} hrs
+                            {(slip.total_hours_worked || 0).toFixed(1)} hrs
                           </span>
                         </td>
-                        <td>₱{(slip.basic_pay || 0).toLocaleString()}</td>
-                        <td>+₱{(slip.overtime_pay || 0).toLocaleString()}</td>
-                        <td>+₱{(slip.allowances || 0).toLocaleString()}</td>
-                        <td style={{ fontWeight: '700' }}>₱{(slip.gross_pay || 0).toLocaleString()}</td>
-                        <td style={{ color: 'var(--danger)' }}>
-                          -₱{((slip.tax_deduction || 0) + (slip.social_deductions || 0) + (slip.other_deductions || 0)).toLocaleString()}
+                        <td style={{ whiteSpace: 'nowrap' }}>₱{(slip.basic_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>+₱{(slip.overtime_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ whiteSpace: 'nowrap' }}>+₱{(slip.allowances || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ fontWeight: '700', whiteSpace: 'nowrap' }}>₱{(slip.gross_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ color: 'var(--danger)', whiteSpace: 'nowrap' }}>
+                          -₱{((slip.tax_deduction || 0) + (slip.social_deductions || 0) + (slip.other_deductions || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td style={{ fontWeight: '800', color: 'var(--success)' }}>
-                          ₱{(slip.net_pay || 0).toLocaleString()}
+                        <td style={{ fontWeight: '800', color: 'var(--success)', whiteSpace: 'nowrap' }}>
+                          ₱{(slip.net_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td style={{ textAlign: 'right' }}>
+                        <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                             {selectedRun.status === 'draft' && (
                               <button
