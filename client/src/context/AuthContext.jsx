@@ -161,6 +161,9 @@ export function AuthProvider({ children }) {
         });
       }
 
+      window.dispatchEvent(new CustomEvent('punch:updated'));
+      window.dispatchEvent(new CustomEvent('timelogs:invalidate'));
+
       return res;
     } catch (err) {
       showToast(err.message, 'danger');

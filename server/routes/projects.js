@@ -24,9 +24,10 @@ router.get('/', authenticate, async (req, res) => {
 
     const allAssignments = db.prepare(`
       SELECT pa.project_id, pa.employee_id, pa.role_on_project, pa.allocation_percent,
-             e.first_name, e.last_name, e.avatar_url, e.employee_code, e.job_title
+             e.first_name, e.last_name, COALESCE(e.avatar_url, u.avatar_url) as avatar_url, e.employee_code, e.job_title
       FROM project_assignments pa
       JOIN employees e ON pa.employee_id = e.id
+      LEFT JOIN users u ON u.employee_id = e.id
       WHERE pa.status = 'active'
       ORDER BY pa.allocation_percent DESC
     `).all();
@@ -74,9 +75,10 @@ router.get('/:id', authenticate, async (req, res) => {
 
     const assignments = db.prepare(`
       SELECT pa.*, 
-             e.employee_code, e.first_name, e.last_name, e.job_title, e.avatar_url, e.department
+             e.employee_code, e.first_name, e.last_name, e.job_title, COALESCE(e.avatar_url, u.avatar_url) as avatar_url, e.department
       FROM project_assignments pa
       JOIN employees e ON pa.employee_id = e.id
+      LEFT JOIN users u ON u.employee_id = e.id
       WHERE pa.project_id = ?
       ORDER BY pa.allocation_percent DESC
     `).all(req.params.id);
@@ -291,11 +293,13 @@ router.get('/workload/overview', authenticate, async (req, res) => {
 
     // 2. Fetch all active employees with their individual total allocations
     const employeeWorkloads = db.prepare(`
-      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.avatar_url, e.team_id,
+      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title,
+             COALESCE(e.avatar_url, u.avatar_url) as avatar_url, e.team_id,
              COALESCE(t.name, 'General') as team_name,
              COALESCE(SUM(pa.allocation_percent), 0) as total_allocation,
              COUNT(DISTINCT pa.project_id) as assigned_projects_count
       FROM employees e
+      LEFT JOIN users u ON u.employee_id = e.id
       LEFT JOIN teams t ON e.team_id = t.id
       LEFT JOIN project_assignments pa ON pa.employee_id = e.id AND pa.status = 'active'
       WHERE e.employment_status = 'active'

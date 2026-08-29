@@ -315,19 +315,21 @@ router.get('/live-status', authenticate, requireManager, async (req, res) => {
 
     // Correlate each employee with their most recent active shift or today's punch
     const employees = db.prepare(`
-      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.department, e.avatar_url,
+      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.department,
+             COALESCE(e.avatar_url, u.avatar_url) as avatar_url,
              t.id as log_id, t.clock_in, t.break_start, t.break_end, t.clock_out, t.total_hours, t.status as punch_status
       FROM employees e
+      LEFT JOIN users u ON u.employee_id = e.id
       LEFT JOIN time_logs t ON t.id = (
         SELECT id FROM time_logs 
-        WHERE employee_id = e.id AND (status IN ('clocked_in', 'on_break') OR date = ?)
+        WHERE employee_id = e.id AND (status IN ('clocked_in', 'on_break') OR date = ? OR DATE(clock_in) = ?)
         ORDER BY id DESC LIMIT 1
       )
       WHERE e.employment_status = 'active'
       ORDER BY e.first_name ASC
-    `).all(today);
+    `).all(today, today);
 
-    res.json({ liveStatus: employees });
+    res.json({ liveStatus: employees, status: employees });
   } catch (err) {
     console.error('Get live status error:', err);
     res.status(500).json({ error: 'Failed to fetch live attendance status.' });

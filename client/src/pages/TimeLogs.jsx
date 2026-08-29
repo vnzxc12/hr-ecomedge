@@ -60,8 +60,33 @@ export default function TimeLogs() {
     loadData();
   }, [token, user?.id, authLoading, startDate, endDate, selectedEmpId, statusFilter, isManager]);
 
-  const loadData = async () => {
-    setLoading(true);
+  // Real-time synchronization and punch events subscriber
+  useEffect(() => {
+    const handleInvalidate = () => {
+      if (token && !authLoading) {
+        loadData(false);
+      }
+    };
+    window.addEventListener('punch:updated', handleInvalidate);
+    window.addEventListener('timelogs:invalidate', handleInvalidate);
+
+    // Auto-poll live floor status every 15 seconds if manager is viewing live floor
+    let intervalId;
+    if (isManager && activeTab === 'live' && token) {
+      intervalId = setInterval(() => {
+        loadData(false);
+      }, 15000);
+    }
+
+    return () => {
+      window.removeEventListener('punch:updated', handleInvalidate);
+      window.removeEventListener('timelogs:invalidate', handleInvalidate);
+      if (intervalId) clearInterval(intervalId);
+    };
+  }, [token, authLoading, isManager, activeTab]);
+
+  const loadData = async (showLoader = true) => {
+    if (showLoader) setLoading(true);
     try {
       if (isManager) {
         const [logsRes, liveRes, empsRes] = await Promise.all([
@@ -70,16 +95,16 @@ export default function TimeLogs() {
           api.employees.getAll()
         ]);
         setLogs(logsRes.logs || []);
-        setLiveStatus(liveRes.status || []);
+        setLiveStatus(liveRes.liveStatus || liveRes.status || []);
         setEmployees(empsRes.employees || []);
       } else {
         const myLogsRes = await api.timelogs.getMy({ startDate, endDate });
         setLogs(myLogsRes.logs || []);
       }
     } catch (err) {
-      showToast(err.message, 'danger');
+      if (showLoader) showToast(err.message, 'danger');
     } finally {
-      setLoading(false);
+      if (showLoader) setLoading(false);
     }
   };
 

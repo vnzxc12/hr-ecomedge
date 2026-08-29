@@ -17,7 +17,7 @@ router.get('/', authenticate, async (req, res) => {
 
     let query = `
       SELECT e.*, 
-             u.id as user_id, u.username, u.role, u.avatar_url,
+             u.id as user_id, u.username, u.role, COALESCE(e.avatar_url, u.avatar_url) as avatar_url,
              t.name as team_name,
              d.title as designation_title,
              m.first_name as manager_first_name, m.last_name as manager_last_name
@@ -94,7 +94,7 @@ router.get('/:id', authenticate, (req, res) => {
 
     const employee = db.prepare(`
       SELECT e.*, 
-             u.id as user_id, u.username, u.role, u.avatar_url,
+             u.id as user_id, u.username, u.role, COALESCE(e.avatar_url, u.avatar_url) as avatar_url,
              t.name as team_name,
              d.title as designation_title,
              m.first_name as manager_first_name, m.last_name as manager_last_name
