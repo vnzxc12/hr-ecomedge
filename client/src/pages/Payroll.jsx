@@ -423,7 +423,7 @@ export default function Payroll() {
           GENERATE PAYROLL RUN MODAL
           ========================================== */}
       {showGenerateModal && (
-        <div className="modal-backdrop" onClick={() => setShowGenerateModal(false)}>
+        <div className="modal-backdrop" style={{ zIndex: 1050 }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -481,7 +481,7 @@ export default function Payroll() {
           GLOBAL TAX & DEDUCTIONS CONFIG MODAL
           ========================================== */}
       {showConfigModal && (
-        <div className="modal-backdrop" onClick={() => setShowConfigModal(false)}>
+        <div className="modal-backdrop" style={{ zIndex: 1050 }}>
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -585,11 +585,134 @@ export default function Payroll() {
       )}
 
       {/* ==========================================
-          EDIT ITEMIZED PAYSLIP DEDUCTIONS & PAY MODAL
+          RUN DETAILS & PAYSLIP LIST MODAL (Manager)
+          ========================================== */}
+      {showRunDetailModal && selectedRun && (
+        <div className="modal-backdrop" style={{ zIndex: 1000 }}>
+          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ zIndex: 1001 }}>
+            <div className="modal-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Banknote size={22} color="var(--primary)" />
+                <div>
+                  <h3 style={{ margin: 0 }}>Payroll Batch: {selectedRun.payroll_code}</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
+                    Period: {selectedRun.period_start} ~ {selectedRun.period_end} • Status: <span className={`badge badge-${selectedRun.status === 'paid' ? 'success' : 'warning'}`}>{selectedRun.status}</span>
+                  </p>
+                </div>
+              </div>
+              <button className="btn-icon" onClick={() => setShowRunDetailModal(false)} title="Close">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body">
+              {/* Batch Actions Bar */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Net Disbursement Total</div>
+                  <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--success)' }}>
+                    ₱{(selectedRun.total_net || 0).toLocaleString()}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  {selectedRun.status === 'draft' && (
+                    <button className="btn btn-primary btn-sm" onClick={() => handleUpdateStatus(selectedRun.id, 'approved')}>
+                      Approve Run
+                    </button>
+                  )}
+                  {selectedRun.status === 'approved' && (
+                    <button className="btn btn-success btn-sm" onClick={() => handleUpdateStatus(selectedRun.id, 'paid')}>
+                      Mark as Paid &amp; Disbursed
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Slips table */}
+              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Logged Hours</th>
+                      <th>Basic Pay</th>
+                      <th>Overtime</th>
+                      <th>Allowances</th>
+                      <th>Gross</th>
+                      <th>Deductions</th>
+                      <th>Net Pay</th>
+                      <th style={{ textAlign: 'right' }}>Slip / Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {runSlips.map((slip) => (
+                      <tr key={slip.id}>
+                        <td>
+                          <div style={{ fontWeight: '700' }}>{slip.first_name} {slip.last_name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{slip.employee_code} • {slip.department}</div>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: (slip.total_hours_worked || 0) > 0 ? 'var(--brand-green)' : 'var(--text-muted)' }}>
+                            {slip.total_hours_worked || 0} hrs
+                          </span>
+                        </td>
+                        <td>₱{(slip.basic_pay || 0).toLocaleString()}</td>
+                        <td>+₱{(slip.overtime_pay || 0).toLocaleString()}</td>
+                        <td>+₱{(slip.allowances || 0).toLocaleString()}</td>
+                        <td style={{ fontWeight: '700' }}>₱{(slip.gross_pay || 0).toLocaleString()}</td>
+                        <td style={{ color: 'var(--danger)' }}>
+                          -₱{((slip.tax_deduction || 0) + (slip.social_deductions || 0) + (slip.other_deductions || 0)).toLocaleString()}
+                        </td>
+                        <td style={{ fontWeight: '800', color: 'var(--success)' }}>
+                          ₱{(slip.net_pay || 0).toLocaleString()}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                            {selectedRun.status === 'draft' && (
+                              <button
+                                className="btn btn-secondary btn-sm"
+                                onClick={() => handleOpenEditSlip(slip)}
+                                title="Edit Deductions, Taxes & Pay"
+                              >
+                                <Edit2 size={13} />
+                                <span>Edit</span>
+                              </button>
+                            )}
+                            <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)} title="Print Payslip">
+                              <Printer size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                {selectedRun.status === 'draft' && (
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteRun(selectedRun.id)}>
+                    <Trash2 size={14} /> Delete Draft Run
+                  </button>
+                )}
+              </div>
+              <button className="btn btn-secondary" onClick={() => setShowRunDetailModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==========================================
+          EDIT ITEMIZED PAYSLIP DEDUCTIONS & PAY MODAL (Rendered on top: z-index 1200)
           ========================================== */}
       {showEditSlipModal && editingSlip && (
-        <div className="modal-backdrop" onClick={() => setShowEditSlipModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px' }}>
+        <div className="modal-backdrop" style={{ zIndex: 1200 }}>
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px', zIndex: 1201 }}>
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Edit2 size={20} color="var(--brand-green)" />
@@ -600,7 +723,7 @@ export default function Payroll() {
                   </div>
                 </div>
               </div>
-              <button className="btn-icon" onClick={() => setShowEditSlipModal(false)}>
+              <button className="btn-icon" onClick={() => setShowEditSlipModal(false)} title="Close">
                 <X size={18} />
               </button>
             </div>
@@ -727,134 +850,11 @@ export default function Payroll() {
       )}
 
       {/* ==========================================
-          RUN DETAILS & PAYSLIP LIST MODAL (Manager)
-          ========================================== */}
-      {showRunDetailModal && selectedRun && (
-        <div className="modal-backdrop" onClick={() => setShowRunDetailModal(false)}>
-          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <Banknote size={22} color="var(--primary)" />
-                <div>
-                  <h3 style={{ margin: 0 }}>Payroll Batch: {selectedRun.payroll_code}</h3>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.2rem 0 0 0' }}>
-                    Period: {selectedRun.period_start} ~ {selectedRun.period_end} • Status: <span className={`badge badge-${selectedRun.status === 'paid' ? 'success' : 'warning'}`}>{selectedRun.status}</span>
-                  </p>
-                </div>
-              </div>
-              <button className="btn-icon" onClick={() => setShowRunDetailModal(false)}>
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="modal-body">
-              {/* Batch Actions Bar */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--bg-tertiary)', padding: '0.85rem 1.25rem', borderRadius: 'var(--radius-md)', marginBottom: '1.25rem', flexWrap: 'wrap', gap: '0.75rem' }}>
-                <div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Net Disbursement Total</div>
-                  <div style={{ fontSize: '1.4rem', fontWeight: '800', color: 'var(--success)' }}>
-                    ₱{(selectedRun.total_net || 0).toLocaleString()}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {selectedRun.status === 'draft' && (
-                    <button className="btn btn-primary btn-sm" onClick={() => handleUpdateStatus(selectedRun.id, 'approved')}>
-                      Approve Run
-                    </button>
-                  )}
-                  {selectedRun.status === 'approved' && (
-                    <button className="btn btn-success btn-sm" onClick={() => handleUpdateStatus(selectedRun.id, 'paid')}>
-                      Mark as Paid &amp; Disbursed
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Slips table */}
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Employee</th>
-                      <th>Logged Hours</th>
-                      <th>Basic Pay</th>
-                      <th>Overtime</th>
-                      <th>Allowances</th>
-                      <th>Gross</th>
-                      <th>Deductions</th>
-                      <th>Net Pay</th>
-                      <th style={{ textAlign: 'right' }}>Slip / Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {runSlips.map((slip) => (
-                      <tr key={slip.id}>
-                        <td>
-                          <div style={{ fontWeight: '700' }}>{slip.first_name} {slip.last_name}</div>
-                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{slip.employee_code} • {slip.department}</div>
-                        </td>
-                        <td>
-                          <span style={{ fontWeight: 700, color: (slip.total_hours_worked || 0) > 0 ? 'var(--brand-green)' : 'var(--text-muted)' }}>
-                            {slip.total_hours_worked || 0} hrs
-                          </span>
-                        </td>
-                        <td>₱{(slip.basic_pay || 0).toLocaleString()}</td>
-                        <td>+₱{(slip.overtime_pay || 0).toLocaleString()}</td>
-                        <td>+₱{(slip.allowances || 0).toLocaleString()}</td>
-                        <td style={{ fontWeight: '700' }}>₱{(slip.gross_pay || 0).toLocaleString()}</td>
-                        <td style={{ color: 'var(--danger)' }}>
-                          -₱{((slip.tax_deduction || 0) + (slip.social_deductions || 0) + (slip.other_deductions || 0)).toLocaleString()}
-                        </td>
-                        <td style={{ fontWeight: '800', color: 'var(--success)' }}>
-                          ₱{(slip.net_pay || 0).toLocaleString()}
-                        </td>
-                        <td style={{ textAlign: 'right' }}>
-                          <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
-                            {selectedRun.status === 'draft' && (
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => handleOpenEditSlip(slip)}
-                                title="Edit Deductions, Taxes & Pay"
-                              >
-                                <Edit2 size={13} />
-                                <span>Edit</span>
-                              </button>
-                            )}
-                            <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)} title="Print Payslip">
-                              <Printer size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                {selectedRun.status === 'draft' && (
-                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteRun(selectedRun.id)}>
-                    <Trash2 size={14} /> Delete Draft Run
-                  </button>
-                )}
-              </div>
-              <button className="btn btn-secondary" onClick={() => setShowRunDetailModal(false)}>
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ==========================================
           PRINTABLE PAYSLIP MODAL
           ========================================== */}
       {showPayslipModal && activePayslip && (
-        <div className="modal-backdrop" onClick={() => setShowPayslipModal(false)}>
-          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ background: '#f3f4f6' }}>
+        <div className="modal-backdrop" style={{ zIndex: 1300 }}>
+          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ background: '#f3f4f6', zIndex: 1301 }}>
             <div className="modal-header" style={{ background: '#ffffff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Printer size={20} color="#009640" />
