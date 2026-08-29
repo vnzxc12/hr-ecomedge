@@ -35,7 +35,7 @@ router.post('/login', async (req, res) => {
 
     // 1. Query user case-insensitively from local database
     let user = db.prepare(`
-      SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, u.avatar_url,
+      SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, COALESCE(u.avatar_url, e.avatar_url) as avatar_url,
              e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.employment_status
       FROM users u
       LEFT JOIN employees e ON u.employee_id = e.id
@@ -79,7 +79,7 @@ router.post('/login', async (req, res) => {
         }
 
         user = db.prepare(`
-          SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, u.avatar_url,
+          SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, COALESCE(u.avatar_url, e.avatar_url) as avatar_url,
                  e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.employment_status
           FROM users u
           LEFT JOIN employees e ON u.employee_id = e.id

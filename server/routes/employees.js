@@ -294,7 +294,8 @@ router.post('/', authenticate, requireManager, async (req, res) => {
         emergency_contact_name: emergency_contact_name || null,
         emergency_contact_phone: emergency_contact_phone || null,
         bank_name: bank_name || null,
-        bank_account_number: bank_account_number || null
+        bank_account_number: bank_account_number || null,
+        avatar_url: avatar_url || null
       };
 
       const { data: sbEmp, error: sbEmpErr } = await supabase.from('employees').insert(empPayload).select().single();

@@ -126,7 +126,7 @@ router.get('/stats', authenticate, async (req, res) => {
       }
 
       const employeeProfile = db.prepare(`
-        SELECT e.*, u.username, u.avatar_url, t.name as team_name, d.title as designation_title
+        SELECT e.*, u.username, COALESCE(e.avatar_url, u.avatar_url) as avatar_url, t.name as team_name, d.title as designation_title
         FROM employees e
         LEFT JOIN users u ON u.employee_id = e.id
         LEFT JOIN teams t ON e.team_id = t.id
