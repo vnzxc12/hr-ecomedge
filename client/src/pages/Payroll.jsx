@@ -708,11 +708,36 @@ export default function Payroll() {
       )}
 
       {/* ==========================================
-          EDIT ITEMIZED PAYSLIP DEDUCTIONS & PAY MODAL (Rendered on top: z-index 1200)
+          EDIT ITEMIZED PAYSLIP DEDUCTIONS & PAY MODAL (Top Layer: z-index 99999)
           ========================================== */}
       {showEditSlipModal && editingSlip && (
-        <div className="modal-backdrop" style={{ zIndex: 1200 }}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '580px', zIndex: 1201 }}>
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 99999,
+            background: 'rgba(10, 25, 49, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '1.25rem'
+          }}
+        >
+          <div
+            className="modal-card"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: 'relative',
+              zIndex: 100000,
+              maxWidth: '580px',
+              width: '100%',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75)'
+            }}
+          >
             <div className="modal-header">
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <Edit2 size={20} color="var(--brand-green)" />

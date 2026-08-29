@@ -22,7 +22,16 @@ async function verifyPartTimePayroll() {
 
   try {
     const adminUser = db.prepare("SELECT * FROM users WHERE role = 'manager' LIMIT 1").get();
-    const token = jwt.sign({ id: adminUser.id, username: adminUser.username, role: 'manager', session_id: 'pt-test' }, JWT_SECRET);
+    const sessionId = 'pt-test-session-' + Date.now();
+    const nowIso = new Date().toISOString();
+    const expiresIso = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    
+    db.prepare(`
+      INSERT OR REPLACE INTO user_sessions (id, user_id, device_fingerprint, ip_address, user_agent, is_revoked, created_at, last_active_at, expires_at)
+      VALUES (?, ?, 'dummy_fingerprint', '127.0.0.1', 'Node-Test', 0, ?, ?, ?)
+    `).run(sessionId, adminUser.id, nowIso, nowIso, expiresIso);
+
+    const token = jwt.sign({ id: adminUser.id, username: adminUser.username, role: 'manager', session_id: sessionId }, JWT_SECRET);
 
     // 1. Create or set up a Part-Time employee with ₱150/hr
     console.log('  1. Creating Part-Time Employee with ₱150.00/hr...');

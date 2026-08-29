@@ -179,11 +179,11 @@ router.post('/generate', authenticate, requireManager, async (req, res) => {
           const isPartTime = emp.employment_type === 'part_time' || (emp.hourly_rate > 0 && (!emp.monthly_salary || emp.monthly_salary <= 0));
 
           if (isPartTime || (emp.hourly_rate > 0 && emp.employment_type !== 'full_time')) {
-            // Part-Time / Hourly Compensation: Exact worked hours * hourly_rate
-            const rate = emp.hourly_rate > 0 ? emp.hourly_rate : (emp.monthly_salary > 0 ? emp.monthly_salary / standardHoursBenchmark : 50.00);
+            // Part-Time / Hourly: Strictly compute pay from hours worked * hourly rate
+            const rate = emp.hourly_rate > 0 ? emp.hourly_rate : 50.00;
             basicPay = totalCreditedRegularHours * rate;
             overtimePay = overtimeHours * (rate * otMultiplier);
-            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+            allowances = 0.00; // No monthly base allowance for purely hourly staff
           } else if (emp.monthly_salary > 0) {
             // Full-Time Salaried: Prorated attendance ratio against 160.0 hours monthly benchmark
             const effectiveHourlyRate = emp.monthly_salary / standardHoursBenchmark;
@@ -195,12 +195,12 @@ router.post('/generate', authenticate, requireManager, async (req, res) => {
             const rate = emp.hourly_rate;
             basicPay = totalCreditedRegularHours * rate;
             overtimePay = overtimeHours * (rate * otMultiplier);
-            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+            allowances = 0.00;
           } else {
             const fallbackRate = 50.00;
             basicPay = totalCreditedRegularHours * fallbackRate;
             overtimePay = overtimeHours * (fallbackRate * otMultiplier);
-            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+            allowances = 0.00;
           }
 
           grossPay = basicPay + overtimePay + allowances;
