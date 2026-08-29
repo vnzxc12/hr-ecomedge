@@ -879,125 +879,150 @@ export default function Payroll() {
           ========================================== */}
       {showPayslipModal && activePayslip && (
         <div className="modal-backdrop" style={{ zIndex: 1300 }}>
-          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ background: '#f3f4f6', zIndex: 1301 }}>
-            <div className="modal-header" style={{ background: '#ffffff' }}>
+          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ background: '#f1f5f9', zIndex: 1301, maxWidth: '880px' }}>
+            <div className="modal-header" style={{ background: '#ffffff', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <Printer size={20} color="#009640" />
-                <h3 style={{ color: '#0A1931' }}>Official Employee Payslip</h3>
+                <Printer size={20} color="var(--brand-green)" />
+                <h3 style={{ color: 'var(--brand-navy)', margin: 0, fontWeight: 800 }}>Official Employee Payslip</h3>
               </div>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
                 <button className="btn btn-primary btn-sm" onClick={handlePrint}>
-                  <Printer size={16} />
-                  <span>Print Document</span>
+                  <Printer size={15} />
+                  <span>Print / Export PDF</span>
                 </button>
-                <button className="btn-icon" onClick={() => setShowPayslipModal(false)}>
+                <button className="btn-icon" onClick={() => setShowPayslipModal(false)} title="Close">
                   <X size={18} />
                 </button>
               </div>
             </div>
 
-            <div className="modal-body" style={{ padding: '1.5rem' }}>
+            <div className="modal-body" style={{ padding: '1.75rem', background: '#f1f5f9', overflowY: 'auto', maxHeight: '78vh' }}>
               {/* Paper Layout */}
               <div className="payslip-paper">
-                {/* Header */}
-                <div className="payslip-header">
+                {/* 1. Header Row */}
+                <div className="payslip-header-row">
                   <div>
-                    <h2 style={{ fontSize: '1.4rem', color: '#0A1931', fontWeight: '900' }}>ECOMEDGE</h2>
-                    <p style={{ fontSize: '0.78rem', color: '#009640', fontWeight: '800', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-                      Research and Analysis Services
-                    </p>
-                    <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.25rem' }}>
-                      Payroll Code: <strong>{activePayslip.payroll_code}</strong>
-                    </p>
+                    <h1 className="payslip-brand-title">ECOMEDGE</h1>
+                    <div className="payslip-brand-subhead">Research and Analysis Services</div>
+                    <div className="payslip-code-text">
+                      Payroll Code: <strong style={{ color: '#0f172a' }}>{activePayslip.payroll_code}</strong>
+                    </div>
                   </div>
 
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: '1.1rem', fontWeight: '900', color: '#0A1931' }}>PAYSLIP VOUCHER</div>
-                    <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
-                      Period: {activePayslip.period_start} ~ {activePayslip.period_end}
+                  <div className="payslip-doc-meta">
+                    <h2 className="payslip-doc-title">PAYSLIP VOUCHER</h2>
+                    <div className="payslip-period-text">
+                      Period: <strong>{activePayslip.period_start}</strong> ~ <strong>{activePayslip.period_end}</strong>
                     </div>
-                    <div style={{ fontSize: '0.82rem', color: '#009640', fontWeight: '700' }}>
-                      Disbursed: {activePayslip.payment_date || 'Pending Processing'}
+                    <div>
+                      {activePayslip.payment_status === 'paid' || activePayslip.payment_date ? (
+                        <span className="payslip-status-pill paid">
+                          <CheckCircle2 size={12} /> Disbursed ({activePayslip.payment_date || 'Paid'})
+                        </span>
+                      ) : (
+                        <span className="payslip-status-pill pending">
+                          <Clock size={12} /> Pending Processing
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
 
-                {/* Employee Meta Grid */}
-                <div className="payslip-employee-grid">
-                  <div>
-                    <div className="meta-label">Employee Name</div>
-                    <div className="meta-val">{activePayslip.first_name} {activePayslip.last_name}</div>
+                {/* Accent Divider */}
+                <div className="payslip-divider-bar" />
+
+                {/* 2. Employee Metadata Grid */}
+                <div className="payslip-employee-card">
+                  <div className="payslip-meta-item">
+                    <div className="label">Employee Name</div>
+                    <div className="value">{activePayslip.first_name} {activePayslip.last_name}</div>
                   </div>
-                  <div>
-                    <div className="meta-label">Employee Code</div>
-                    <div className="meta-val">{activePayslip.employee_code}</div>
+                  <div className="payslip-meta-item">
+                    <div className="label">Employee Code</div>
+                    <div className="value" style={{ fontFamily: 'ui-monospace, monospace' }}>{activePayslip.employee_code}</div>
                   </div>
-                  <div>
-                    <div className="meta-label">Department / Team</div>
-                    <div className="meta-val">{activePayslip.department}</div>
+                  <div className="payslip-meta-item">
+                    <div className="label">Department / Team</div>
+                    <div className="value">{activePayslip.department || 'General Operations'}</div>
                   </div>
-                  <div>
-                    <div className="meta-label">Designation</div>
-                    <div className="meta-val">{activePayslip.job_title}</div>
+                  <div className="payslip-meta-item">
+                    <div className="label">Designation / Role</div>
+                    <div className="value">{activePayslip.job_title || 'Staff Specialist'}</div>
                   </div>
-                  <div>
-                    <div className="meta-label">Bank Account</div>
-                    <div className="meta-val">{activePayslip.bank_name || 'BDO'} - {activePayslip.bank_account_number || '**** ****'}</div>
+                  <div className="payslip-meta-item">
+                    <div className="label">Payment Method / Bank</div>
+                    <div className="value">{activePayslip.bank_name || 'BDO Unibank'} - {activePayslip.bank_account_number || '•••• ••••'}</div>
                   </div>
-                  <div>
-                    <div className="meta-label">Hours Logged</div>
-                    <div className="meta-val">{activePayslip.total_hours_worked || 0} hrs</div>
+                  <div className="payslip-meta-item">
+                    <div className="label">Logged Attendance</div>
+                    <div className="value" style={{ color: (activePayslip.total_hours_worked || 0) > 0 ? '#009640' : '#64748b' }}>
+                      {(activePayslip.total_hours_worked || 0).toFixed(1)} hrs {activePayslip.overtime_hours > 0 ? `(+${activePayslip.overtime_hours}h OT)` : ''}
+                    </div>
                   </div>
                 </div>
 
-                {/* Earnings & Deductions Tables */}
-                <div className="payslip-tables-grid">
-                  {/* Earnings */}
-                  <div>
-                    <div className="table-heading">Earnings (PHP ₱)</div>
-                    <table className="slip-table">
+                {/* 3. Side-by-Side Breakdown Tables */}
+                <div className="payslip-breakdown-grid">
+                  {/* Earnings Block */}
+                  <div className="payslip-block">
+                    <div className="payslip-block-header earnings">
+                      <span>1. Gross Earnings</span>
+                      <span>Amount (PHP)</span>
+                    </div>
+                    <table className="payslip-table">
                       <tbody>
                         <tr>
                           <td>Basic Compensation</td>
-                          <td style={{ textAlign: 'right', fontWeight: '600' }}>₱{activePayslip.basic_pay.toLocaleString()}</td>
+                          <td className="amount">₱{(activePayslip.basic_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                         <tr>
                           <td>Overtime Pay ({activePayslip.overtime_hours || 0} hrs)</td>
-                          <td style={{ textAlign: 'right', fontWeight: '600' }}>₱{activePayslip.overtime_pay.toLocaleString()}</td>
+                          <td className="amount">₱{(activePayslip.overtime_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
                         <tr>
                           <td>Transport &amp; Meal Allowance</td>
-                          <td style={{ textAlign: 'right', fontWeight: '600' }}>₱{activePayslip.allowances.toLocaleString()}</td>
+                          <td className="amount">₱{(activePayslip.allowances || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                         </tr>
-                        <tr className="total-row">
-                          <td><strong>Gross Pay</strong></td>
-                          <td style={{ textAlign: 'right', fontWeight: '800' }}>₱{activePayslip.gross_pay.toLocaleString()}</td>
+                        <tr className="subtotal-row">
+                          <td style={{ fontWeight: 800 }}>Total Gross Earnings</td>
+                          <td className="amount" style={{ fontWeight: 900, color: '#0f172a' }}>
+                            ₱{(activePayslip.gross_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
 
-                  {/* Deductions */}
-                  <div>
-                    <div className="table-heading">Deductions (PHP ₱)</div>
-                    <table className="slip-table">
+                  {/* Deductions Block */}
+                  <div className="payslip-block">
+                    <div className="payslip-block-header deductions">
+                      <span>2. Itemized Deductions</span>
+                      <span>Amount (PHP)</span>
+                    </div>
+                    <table className="payslip-table">
                       <tbody>
                         <tr>
-                          <td>Withholding Tax</td>
-                          <td style={{ textAlign: 'right', color: '#ef4444' }}>-₱{activePayslip.tax_deduction.toLocaleString()}</td>
+                          <td>Withholding Tax (BIR)</td>
+                          <td className="amount" style={{ color: '#dc2626' }}>
+                            -₱{(activePayslip.tax_deduction || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
                         </tr>
                         <tr>
                           <td>SSS / PhilHealth / HDMF</td>
-                          <td style={{ textAlign: 'right', color: '#ef4444' }}>-₱{activePayslip.social_deductions.toLocaleString()}</td>
+                          <td className="amount" style={{ color: '#dc2626' }}>
+                            -₱{(activePayslip.social_deductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
                         </tr>
                         <tr>
-                          <td>Other Deductions</td>
-                          <td style={{ textAlign: 'right', color: '#ef4444' }}>-₱{activePayslip.other_deductions.toLocaleString()}</td>
+                          <td>Other Deductions / Advances</td>
+                          <td className="amount" style={{ color: '#dc2626' }}>
+                            -₱{(activePayslip.other_deductions || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
                         </tr>
-                        <tr className="total-row">
-                          <td><strong>Total Deductions</strong></td>
-                          <td style={{ textAlign: 'right', fontWeight: '800', color: '#ef4444' }}>
-                            -₱{(activePayslip.tax_deduction + activePayslip.social_deductions + activePayslip.other_deductions).toLocaleString()}
+                        <tr className="subtotal-row">
+                          <td style={{ fontWeight: 800, color: '#dc2626' }}>Total Deductions</td>
+                          <td className="amount" style={{ fontWeight: 900, color: '#dc2626' }}>
+                            -₱{((activePayslip.tax_deduction || 0) + (activePayslip.social_deductions || 0) + (activePayslip.other_deductions || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
                         </tr>
                       </tbody>
@@ -1005,27 +1030,40 @@ export default function Payroll() {
                   </div>
                 </div>
 
-                {/* Net Pay Banner */}
-                <div className="payslip-net-banner">
+                {/* 4. Highlighted Net Pay Callout Banner */}
+                <div className="payslip-net-card">
                   <div>
-                    <div style={{ fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: '#64748b' }}>
-                      Net Take-Home Pay (Disbursed in PHP)
-                    </div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: '900', color: '#009640' }}>
-                      ₱{activePayslip.net_pay.toLocaleString()}
+                    <div className="payslip-net-label">Net Take-Home Pay (Disbursed in PHP)</div>
+                    <div className="payslip-net-amount">
+                      ₱{(activePayslip.net_pay || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#009640', fontWeight: '700', fontSize: '0.85rem' }}>
-                      <CheckCircle2 size={16} /> Verified by System
+
+                  <div className="payslip-net-seal">
+                    <div className="payslip-net-seal-title">
+                      <CheckCircle2 size={15} /> Verified Digital Record
                     </div>
-                    <div style={{ fontSize: '0.7rem', color: '#94a3b8' }}>Ecomedge Digital Seal</div>
+                    <div className="payslip-net-seal-sub">Ecomedge Enterprise Seal</div>
+                  </div>
+                </div>
+
+                {/* 5. Sign-off Acknowledgement Block */}
+                <div className="payslip-signoff-row">
+                  <div className="payslip-sign-col">
+                    <div className="payslip-sign-line" />
+                    <div className="payslip-sign-name">Prepared by: HR &amp; Operations Management</div>
+                    <div className="payslip-sign-title">Authorized Payroll Officer</div>
+                  </div>
+                  <div className="payslip-sign-col">
+                    <div className="payslip-sign-line" />
+                    <div className="payslip-sign-name">Received by: {activePayslip.first_name} {activePayslip.last_name}</div>
+                    <div className="payslip-sign-title">Employee Signature &amp; Date</div>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="modal-footer" style={{ background: '#ffffff' }}>
+            <div className="modal-footer" style={{ background: '#ffffff', borderTop: '1px solid #e2e8f0' }}>
               <button className="btn btn-secondary" onClick={() => setShowPayslipModal(false)}>
                 Close
               </button>
