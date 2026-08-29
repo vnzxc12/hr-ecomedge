@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate } = require('../middleware/auth');
 
 // GET /api/dashboard/stats
-router.get('/stats', authenticate, (req, res) => {
+router.get('/stats', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const isManager = req.user.role === 'manager';
     const employeeId = req.user.employee_id;
     const today = new Date().toISOString().split('T')[0];
@@ -14,13 +18,13 @@ router.get('/stats', authenticate, (req, res) => {
       // 1. Manager & Executive Overview
       const totalEmployees = db.prepare("SELECT COUNT(*) as count FROM employees WHERE employment_status = 'active'").get().count;
 
-      // Live Attendance status today
+      // Live Attendance status today (open shifts + today's logs)
       const todayLogs = db.prepare(`
         SELECT t.*, e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.avatar_url, tm.name as team_name
         FROM time_logs t
         JOIN employees e ON t.employee_id = e.id
         LEFT JOIN teams tm ON e.team_id = tm.id
-        WHERE t.date = ?
+        WHERE t.status IN ('clocked_in', 'on_break') OR t.date = ?
         ORDER BY t.clock_in DESC
       `).all(today);
 

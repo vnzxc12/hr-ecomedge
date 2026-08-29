@@ -1,15 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, syncFromSupabase, pushToSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
+const { recordAudit } = require('../middleware/auditMiddleware');
 
 // Helper to calculate hours between two timestamps minus break
 function computeHours(clockInStr, breakStartStr, breakEndStr, clockOutStr) {
   if (!clockInStr) return { totalHours: 0, breakMins: 0, overtimeHours: 0 };
-  
+
   const inTime = new Date(clockInStr).getTime();
   const outTime = clockOutStr ? new Date(clockOutStr).getTime() : Date.now();
-  
+
   let breakMs = 0;
   if (breakStartStr && breakEndStr) {
     breakMs = Math.max(0, new Date(breakEndStr).getTime() - new Date(breakStartStr).getTime());
@@ -27,11 +28,14 @@ function computeHours(clockInStr, breakStartStr, breakEndStr, clockOutStr) {
 }
 
 // POST /api/timelogs/punch (Punch Clock: In, Lunch/Break Start, Lunch/Break End, Out)
-router.post('/punch', authenticate, (req, res) => {
+router.post('/punch', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     let employeeId = req.user.employee_id;
     if (!employeeId) {
-      // Try to find employee by user id or user code
       const emp = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.user.id);
       if (emp) employeeId = emp.id;
       else {
@@ -62,13 +66,23 @@ router.post('/punch', authenticate, (req, res) => {
         return res.status(400).json({ error: `You are already ${activeLog.status === 'on_break' ? 'on break' : 'clocked in'}.` });
       }
 
-      // If user had a prior finished shift today or is starting new shift
       const result = db.prepare(`
         INSERT INTO time_logs (employee_id, date, clock_in, status, notes)
         VALUES (?, ?, ?, 'clocked_in', ?)
       `).run(employeeId, today, nowIso, notes || 'Clocked in for work shift');
 
       const newLog = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(result.lastInsertRowid);
+      
+      // Real-time Cloud Push
+      await pushToSupabase('time_logs', 'insert', newLog, newLog.id);
+
+      recordAudit(req, {
+        action: 'CLOCK_IN',
+        resourceType: 'timelog',
+        resourceId: newLog.id,
+        afterState: newLog
+      });
+
       return res.json({ message: 'Successfully Clocked In! Have a productive shift.', log: newLog });
     }
 
@@ -90,6 +104,16 @@ router.post('/punch', authenticate, (req, res) => {
       `).run(nowIso, targetLog.id);
 
       const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(targetLog.id);
+      await pushToSupabase('time_logs', 'update', updated, updated.id);
+
+      recordAudit(req, {
+        action: 'BREAK_START',
+        resourceType: 'timelog',
+        resourceId: updated.id,
+        beforeState: targetLog,
+        afterState: updated
+      });
+
       return res.json({ message: 'Break / Lunch started. Enjoy your rest!', log: updated });
     }
 
@@ -98,7 +122,7 @@ router.post('/punch', authenticate, (req, res) => {
         return res.status(400).json({ error: 'You are not currently on break.' });
       }
 
-      const { totalHours, breakMins } = computeHours(targetLog.clock_in, targetLog.break_start, nowIso, null);
+      const { breakMins } = computeHours(targetLog.clock_in, targetLog.break_start, nowIso, null);
 
       db.prepare(`
         UPDATE time_logs
@@ -107,6 +131,16 @@ router.post('/punch', authenticate, (req, res) => {
       `).run(nowIso, breakMins, targetLog.id);
 
       const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(targetLog.id);
+      await pushToSupabase('time_logs', 'update', updated, updated.id);
+
+      recordAudit(req, {
+        action: 'BREAK_END',
+        resourceType: 'timelog',
+        resourceId: updated.id,
+        beforeState: targetLog,
+        afterState: updated
+      });
+
       return res.json({ message: 'Break ended. Welcome back!', log: updated });
     }
 
@@ -130,6 +164,16 @@ router.post('/punch', authenticate, (req, res) => {
       `).run(nowIso, breakEndToUse, breakMins, totalHours, overtimeHours, targetLog.id);
 
       const updated = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(targetLog.id);
+      await pushToSupabase('time_logs', 'update', updated, updated.id);
+
+      recordAudit(req, {
+        action: 'CLOCK_OUT',
+        resourceType: 'timelog',
+        resourceId: updated.id,
+        beforeState: targetLog,
+        afterState: updated
+      });
+
       return res.json({ message: 'Successfully Clocked Out. Great job today!', log: updated });
     }
 
@@ -141,8 +185,12 @@ router.post('/punch', authenticate, (req, res) => {
 });
 
 // GET /api/timelogs/today (Get logged-in employee's active status)
-router.get('/today', authenticate, (req, res) => {
+router.get('/today', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     let employeeId = req.user.employee_id;
     if (!employeeId) {
       const emp = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.user.id);
@@ -151,7 +199,7 @@ router.get('/today', authenticate, (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-    
+
     // Check for open active shift first (clocked_in or on_break)
     const openLog = db.prepare(`
       SELECT * FROM time_logs
@@ -173,8 +221,12 @@ router.get('/today', authenticate, (req, res) => {
 });
 
 // GET /api/timelogs/my (Employee's punch history)
-router.get('/my', authenticate, (req, res) => {
+router.get('/my', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const employeeId = req.user.employee_id;
     if (!employeeId) return res.json({ logs: [], totalHoursSum: 0 });
 
@@ -205,8 +257,12 @@ router.get('/my', authenticate, (req, res) => {
 });
 
 // GET /api/timelogs/all (Manager view of all company logs)
-router.get('/all', authenticate, requireManager, (req, res) => {
+router.get('/all', authenticate, requireManager, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const { startDate, endDate, employeeId, department, status } = req.query;
 
     let query = `
@@ -249,15 +305,24 @@ router.get('/all', authenticate, requireManager, (req, res) => {
 });
 
 // GET /api/timelogs/live-status (Manager snapshot of current company attendance)
-router.get('/live-status', authenticate, requireManager, (req, res) => {
+router.get('/live-status', authenticate, requireManager, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const today = new Date().toISOString().split('T')[0];
 
+    // Correlate each employee with their most recent active shift or today's punch
     const employees = db.prepare(`
-      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.department,
+      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.department, e.avatar_url,
              t.id as log_id, t.clock_in, t.break_start, t.break_end, t.clock_out, t.total_hours, t.status as punch_status
       FROM employees e
-      LEFT JOIN time_logs t ON t.employee_id = e.id AND t.date = ?
+      LEFT JOIN time_logs t ON t.id = (
+        SELECT id FROM time_logs 
+        WHERE employee_id = e.id AND (status IN ('clocked_in', 'on_break') OR date = ?)
+        ORDER BY id DESC LIMIT 1
+      )
       WHERE e.employment_status = 'active'
       ORDER BY e.first_name ASC
     `).all(today);
@@ -270,7 +335,7 @@ router.get('/live-status', authenticate, requireManager, (req, res) => {
 });
 
 // POST /api/timelogs/manual (Manager manual add / edit)
-router.post('/manual', authenticate, requireManager, (req, res) => {
+router.post('/manual', authenticate, requireManager, async (req, res) => {
   try {
     const { employee_id, date, clock_in, break_start, break_end, clock_out, notes } = req.body;
 
@@ -287,6 +352,8 @@ router.post('/manual', authenticate, requireManager, (req, res) => {
     `).run(employee_id, date, clock_in, break_start || null, break_end || null, clock_out || null, totalHours, breakMins, overtimeHours, status, notes || 'Manually logged by HR manager');
 
     const created = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(result.lastInsertRowid);
+    await pushToSupabase('time_logs', 'insert', created, created.id);
+
     res.json({ message: 'Time log recorded successfully.', log: created });
   } catch (err) {
     console.error('Manual time log error:', err);
@@ -295,9 +362,13 @@ router.post('/manual', authenticate, requireManager, (req, res) => {
 });
 
 // DELETE /api/timelogs/:id (Manager delete log)
-router.delete('/:id', authenticate, requireManager, (req, res) => {
+router.delete('/:id', authenticate, requireManager, async (req, res) => {
   try {
+    const existing = db.prepare('SELECT * FROM time_logs WHERE id = ?').get(req.params.id);
     db.prepare('DELETE FROM time_logs WHERE id = ?').run(req.params.id);
+    if (existing) {
+      await pushToSupabase('time_logs', 'delete', existing, existing.id);
+    }
     res.json({ message: 'Time log deleted successfully.' });
   } catch (err) {
     console.error('Delete time log error:', err);

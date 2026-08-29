@@ -315,13 +315,18 @@ export default function Dashboard({ onNavigate }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.5rem' }}>
           {/* Live Floor Activity */}
           <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+            <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+              <h3 style={{ fontSize: '1.05rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.45rem', margin: 0 }}>
                 <Clock size={17} color="var(--brand-green)" /> Live Floor &amp; Attendance ({liveAttendance.length} Checked In)
               </h3>
-              <button className="btn btn-sm btn-secondary" onClick={() => onNavigate('timelogs')}>
-                Full Time Logs <ArrowRight size={13} />
-              </button>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button className="btn btn-sm btn-secondary" onClick={() => loadDashboard()} title="Refresh Live Attendance">
+                  Refresh
+                </button>
+                <button className="btn btn-sm btn-secondary" onClick={() => onNavigate('timelogs')}>
+                  Full Time Logs <ArrowRight size={13} />
+                </button>
+              </div>
             </div>
 
             <div className="table-container" style={{ border: 'none', borderRadius: 0, maxHeight: '280px', overflowY: 'auto' }}>

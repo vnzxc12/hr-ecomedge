@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, syncFromSupabase, pushToSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
 
 // GET /api/leaves/my (Current employee leave overview)
-router.get('/my', authenticate, (req, res) => {
+router.get('/my', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const employeeId = req.user.employee_id;
     if (!employeeId) {
       return res.json({ leaves: [], balance: null });
@@ -30,8 +34,11 @@ router.get('/my', authenticate, (req, res) => {
 });
 
 // GET /api/leaves/all (Manager view all requests)
-router.get('/all', authenticate, requireManager, (req, res) => {
+router.get('/all', authenticate, requireManager, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
     const { status, leave_type, employee_id } = req.query;
 
     let query = `
@@ -68,7 +75,7 @@ router.get('/all', authenticate, requireManager, (req, res) => {
 });
 
 // POST /api/leaves/apply (Employee submit leave application)
-router.post('/apply', authenticate, (req, res) => {
+router.post('/apply', authenticate, async (req, res) => {
   try {
     const employeeId = req.user.employee_id;
     if (!employeeId) {
@@ -121,6 +128,7 @@ router.post('/apply', authenticate, (req, res) => {
     `).run(employeeId, leave_type, start_date, end_date, daysCount, reason.trim());
 
     const created = db.prepare('SELECT * FROM leaves WHERE id = ?').get(result.lastInsertRowid);
+    await pushToSupabase('leaves', 'insert', created, created.id);
 
     res.status(201).json({
       message: 'Leave application submitted successfully. Awaiting manager approval.',
@@ -133,7 +141,7 @@ router.post('/apply', authenticate, (req, res) => {
 });
 
 // PUT /api/leaves/:id/review (Manager Approve / Reject)
-router.put('/:id/review', authenticate, requireManager, (req, res) => {
+router.put('/:id/review', authenticate, requireManager, async (req, res) => {
   try {
     const leaveId = parseInt(req.params.id, 10);
     const { status, review_notes } = req.body; // 'approved' | 'rejected'
@@ -184,6 +192,8 @@ router.put('/:id/review', authenticate, requireManager, (req, res) => {
     })();
 
     const updated = db.prepare('SELECT * FROM leaves WHERE id = ?').get(leaveId);
+    await pushToSupabase('leaves', 'update', updated, updated.id);
+
     res.json({ message: `Leave application marked as ${status}.`, leave: updated });
   } catch (err) {
     console.error('Review leave error:', err);

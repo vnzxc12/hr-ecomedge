@@ -684,7 +684,24 @@ async function pushToSupabase(table, action, data, id) {
       delete cleanData.user_id;
       delete cleanData.username;
       delete cleanData.role;
+    } else if (table === 'time_logs') {
+      delete cleanData.first_name;
+      delete cleanData.last_name;
+      delete cleanData.job_title;
+      delete cleanData.department;
+      delete cleanData.employee_code;
+      delete cleanData.avatar_url;
+      delete cleanData.team_name;
+      delete cleanData.log_id;
+      delete cleanData.punch_status;
+    } else if (table === 'leaves') {
+      delete cleanData.first_name;
+      delete cleanData.last_name;
+      delete cleanData.job_title;
+      delete cleanData.department;
+      delete cleanData.employee_code;
     }
+
     if (action === 'insert') {
       await supabase.from(table).insert(cleanData);
     } else if (action === 'update') {

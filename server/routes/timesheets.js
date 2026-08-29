@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, syncFromSupabase, pushToSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
 
 // GET /api/timesheets (List timesheets with project & employee details)
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const { employee_id, project_id, status, start_date, end_date } = req.query;
 
     let query = `
@@ -58,7 +62,7 @@ router.get('/', authenticate, (req, res) => {
 });
 
 // POST /api/timesheets (Log new timesheet entry)
-router.post('/', authenticate, (req, res) => {
+router.post('/', authenticate, async (req, res) => {
   try {
     const { employee_id, project_id, date, start_time, end_time, break_mins, total_hours, overtime_hours, task_description } = req.body;
 
@@ -81,9 +85,12 @@ router.post('/', authenticate, (req, res) => {
       break_mins || 60, calculatedHours, overtime_hours || 0, task_description.trim()
     );
 
+    const created = db.prepare('SELECT * FROM timesheets WHERE id = ?').get(result.lastInsertRowid);
+    await pushToSupabase('timesheets', 'insert', created, created.id);
+
     res.status(201).json({
       message: 'Timesheet submitted successfully!',
-      timesheet_id: result.lastInsertRowid
+      timesheet_id: created.id
     });
   } catch (err) {
     console.error('Error logging timesheet:', err);
@@ -92,7 +99,7 @@ router.post('/', authenticate, (req, res) => {
 });
 
 // PUT /api/timesheets/:id/review (Approve or Reject - Manager only)
-router.put('/:id/review', authenticate, requireManager, (req, res) => {
+router.put('/:id/review', authenticate, requireManager, async (req, res) => {
   try {
     const { status, review_notes } = req.body;
     if (!status || !['approved', 'rejected', 'submitted'].includes(status)) {
@@ -108,6 +115,11 @@ router.put('/:id/review', authenticate, requireManager, (req, res) => {
       WHERE id = ?
     `).run(status, review_notes || '', req.user.id, req.params.id);
 
+    const updated = db.prepare('SELECT * FROM timesheets WHERE id = ?').get(req.params.id);
+    if (updated) {
+      await pushToSupabase('timesheets', 'update', updated, updated.id);
+    }
+
     res.json({ message: `Timesheet marked as ${status}.` });
   } catch (err) {
     console.error('Error reviewing timesheet:', err);
@@ -116,7 +128,7 @@ router.put('/:id/review', authenticate, requireManager, (req, res) => {
 });
 
 // DELETE /api/timesheets/:id
-router.delete('/:id', authenticate, (req, res) => {
+router.delete('/:id', authenticate, async (req, res) => {
   try {
     const ts = db.prepare('SELECT * FROM timesheets WHERE id = ?').get(req.params.id);
     if (!ts) {
@@ -128,6 +140,8 @@ router.delete('/:id', authenticate, (req, res) => {
     }
 
     db.prepare('DELETE FROM timesheets WHERE id = ?').run(req.params.id);
+    await pushToSupabase('timesheets', 'delete', ts, ts.id);
+
     res.json({ message: 'Timesheet entry deleted successfully.' });
   } catch (err) {
     console.error('Error deleting timesheet:', err);
