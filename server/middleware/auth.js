@@ -81,7 +81,8 @@ async function authenticate(req, res, next) {
 
     next();
   } catch (err) {
-    return res.status(403).json({ error: 'Session expired or invalid token.' });
+    console.error('Authentication verification error:', err.message);
+    return res.status(401).json({ error: 'Session expired or invalid token. Please log in again.' });
   }
 }
 
