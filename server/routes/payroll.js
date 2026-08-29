@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { db, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
+const { db, supabase, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
 const { recordAudit } = require('../middleware/auditMiddleware');
 
@@ -251,6 +251,46 @@ router.post('/generate', authenticate, requireManager, async (req, res) => {
       WHERE p.payroll_id = ?
     `).all(createdPayrollId);
 
+    // Save to Supabase Cloud for persistent serverless storage
+    if (supabase) {
+      try {
+        const { data: sbPayroll, error: sbPayErr } = await supabase.from('payrolls').upsert({
+          id: createdPayrollId,
+          payroll_code: payrollCode,
+          period_start,
+          period_end,
+          status: 'draft',
+          total_gross: parseFloat(totalGrossSum.toFixed(2)),
+          total_deductions: parseFloat(totalDeductionsSum.toFixed(2)),
+          total_net: parseFloat(totalNetSum.toFixed(2)),
+          created_by: req.user.id
+        }).select().single();
+
+        if (sbPayroll && sbPayroll.id) {
+          const slipsPayload = payslips.map(s => ({
+            id: s.id,
+            payroll_id: sbPayroll.id,
+            employee_id: s.employee_id,
+            basic_pay: s.basic_pay,
+            overtime_pay: s.overtime_pay,
+            allowances: s.allowances,
+            gross_pay: s.gross_pay,
+            tax_deduction: s.tax_deduction,
+            social_deductions: s.social_deductions,
+            other_deductions: s.other_deductions,
+            net_pay: s.net_pay,
+            total_hours_worked: s.total_hours_worked,
+            overtime_hours: s.overtime_hours,
+            payment_status: 'unpaid'
+          }));
+
+          await supabase.from('payslips').upsert(slipsPayload);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase payroll generation sync error:', sbErr.message);
+      }
+    }
+
     // Record audit snapshot for payroll generation
     recordAudit({
       req,
@@ -300,8 +340,12 @@ router.get('/runs', authenticate, requireManager, async (req, res) => {
 });
 
 // GET /api/payroll/runs/:id (Manager view single run details & slips)
-router.get('/runs/:id', authenticate, requireManager, (req, res) => {
+router.get('/runs/:id', authenticate, requireManager, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const runId = parseInt(req.params.id, 10);
     const run = db.prepare(`
       SELECT p.*, u.username as created_by_username
@@ -330,7 +374,7 @@ router.get('/runs/:id', authenticate, requireManager, (req, res) => {
 });
 
 // PUT /api/payroll/payslips/:id (Manager edit individual payslip deductions, taxes, and pay lines)
-router.put('/payslips/:id', authenticate, requireManager, (req, res) => {
+router.put('/payslips/:id', authenticate, requireManager, async (req, res) => {
   try {
     const slipId = parseInt(req.params.id, 10);
     const existing = db.prepare('SELECT * FROM payslips WHERE id = ?').get(slipId);
@@ -368,6 +412,7 @@ router.put('/payslips/:id', authenticate, requireManager, (req, res) => {
     const newHours = total_hours_worked !== undefined ? parseFloat(total_hours_worked) : existing.total_hours_worked;
     const newOTHours = overtime_hours !== undefined ? parseFloat(overtime_hours) : existing.overtime_hours;
 
+    let totals;
     db.transaction(() => {
       // 1. Update payslip
       db.prepare(`
@@ -386,7 +431,7 @@ router.put('/payslips/:id', authenticate, requireManager, (req, res) => {
       `).run(newBasic, newOTPay, newAllowances, newGross, newTax, newSocial, newOther, newNet, newHours, newOTHours, slipId);
 
       // 2. Recalculate parent payroll run totals
-      const totals = db.prepare(`
+      totals = db.prepare(`
         SELECT 
           COALESCE(SUM(gross_pay), 0) as sum_gross,
           COALESCE(SUM(tax_deduction + social_deductions + other_deductions), 0) as sum_deductions,
@@ -401,6 +446,34 @@ router.put('/payslips/:id', authenticate, requireManager, (req, res) => {
         WHERE id = ?
       `).run(totals.sum_gross, totals.sum_deductions, totals.sum_net, existing.payroll_id);
     })();
+
+    // Persist to Supabase
+    if (supabase) {
+      try {
+        await supabase.from('payslips').update({
+          basic_pay: newBasic,
+          overtime_pay: newOTPay,
+          allowances: newAllowances,
+          gross_pay: newGross,
+          tax_deduction: newTax,
+          social_deductions: newSocial,
+          other_deductions: newOther,
+          net_pay: newNet,
+          total_hours_worked: newHours,
+          overtime_hours: newOTHours
+        }).eq('id', slipId);
+
+        if (totals) {
+          await supabase.from('payrolls').update({
+            total_gross: totals.sum_gross,
+            total_deductions: totals.sum_deductions,
+            total_net: totals.sum_net
+          }).eq('id', existing.payroll_id);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase payslip update sync error:', sbErr.message);
+      }
+    }
 
     const updatedSlip = db.prepare(`
       SELECT p.*, e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.bank_name, e.bank_account_number
@@ -431,8 +504,74 @@ router.put('/payslips/:id', authenticate, requireManager, (req, res) => {
   }
 });
 
+// DELETE /api/payroll/payslips/:id (Manager delete single payslip from draft batch)
+router.delete('/payslips/:id', authenticate, requireManager, async (req, res) => {
+  try {
+    const slipId = parseInt(req.params.id, 10);
+    const slip = db.prepare('SELECT * FROM payslips WHERE id = ?').get(slipId);
+    if (!slip) {
+      return res.status(404).json({ error: 'Payslip not found.' });
+    }
+
+    const run = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(slip.payroll_id);
+    if (run && run.status === 'paid') {
+      return res.status(400).json({ error: 'Cannot delete a payslip from a paid and disbursed payroll run.' });
+    }
+
+    let totals;
+    db.transaction(() => {
+      db.prepare('DELETE FROM payslips WHERE id = ?').run(slipId);
+
+      // Recalculate parent payroll run totals
+      totals = db.prepare(`
+        SELECT 
+          COALESCE(SUM(gross_pay), 0) as sum_gross,
+          COALESCE(SUM(tax_deduction + social_deductions + other_deductions), 0) as sum_deductions,
+          COALESCE(SUM(net_pay), 0) as sum_net
+        FROM payslips
+        WHERE payroll_id = ?
+      `).get(slip.payroll_id);
+
+      db.prepare(`
+        UPDATE payrolls
+        SET total_gross = ?, total_deductions = ?, total_net = ?
+        WHERE id = ?
+      `).run(totals.sum_gross, totals.sum_deductions, totals.sum_net, slip.payroll_id);
+    })();
+
+    if (supabase) {
+      try {
+        await supabase.from('payslips').delete().eq('id', slipId);
+        if (totals) {
+          await supabase.from('payrolls').update({
+            total_gross: totals.sum_gross,
+            total_deductions: totals.sum_deductions,
+            total_net: totals.sum_net
+          }).eq('id', slip.payroll_id);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase payslip delete sync error:', sbErr.message);
+      }
+    }
+
+    recordAudit({
+      req,
+      action: 'PAYSLIP_DELETE',
+      resourceType: 'payslip',
+      resourceId: slipId,
+      beforeState: slip,
+      afterState: null
+    });
+
+    res.json({ message: 'Payslip has been deleted from batch.' });
+  } catch (err) {
+    console.error('Delete payslip error:', err);
+    res.status(500).json({ error: 'Failed to delete payslip.' });
+  }
+});
+
 // DELETE /api/payroll/runs/:id (Manager delete draft run)
-router.delete('/runs/:id', authenticate, requireManager, (req, res) => {
+router.delete('/runs/:id', authenticate, requireManager, async (req, res) => {
   try {
     const runId = parseInt(req.params.id, 10);
     const run = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(runId);
@@ -449,6 +588,24 @@ router.delete('/runs/:id', authenticate, requireManager, (req, res) => {
       db.prepare('DELETE FROM payrolls WHERE id = ?').run(runId);
     })();
 
+    if (supabase) {
+      try {
+        await supabase.from('payslips').delete().eq('payroll_id', runId);
+        await supabase.from('payrolls').delete().eq('id', runId);
+      } catch (sbErr) {
+        console.warn('Supabase payroll run delete sync error:', sbErr.message);
+      }
+    }
+
+    recordAudit({
+      req,
+      action: 'PAYROLL_RUN_DELETE',
+      resourceType: 'payroll',
+      resourceId: runId,
+      beforeState: run,
+      afterState: null
+    });
+
     res.json({ message: `Payroll run ${run.payroll_code} has been deleted.` });
   } catch (err) {
     console.error('Delete payroll run error:', err);
@@ -457,7 +614,7 @@ router.delete('/runs/:id', authenticate, requireManager, (req, res) => {
 });
 
 // PUT /api/payroll/runs/:id/status (Manager approve or pay)
-router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
+router.put('/runs/:id/status', authenticate, requireManager, async (req, res) => {
   try {
     const runId = parseInt(req.params.id, 10);
     const { status } = req.body; // 'draft', 'approved', 'paid'
@@ -480,6 +637,21 @@ router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
         db.prepare("UPDATE payslips SET payment_status = 'paid' WHERE payroll_id = ?").run(runId);
       }
     })();
+
+    if (supabase) {
+      try {
+        await supabase.from('payrolls').update({
+          status,
+          payment_date: status === 'paid' ? today : null
+        }).eq('id', runId);
+
+        if (status === 'paid') {
+          await supabase.from('payslips').update({ payment_status: 'paid' }).eq('payroll_id', runId);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase status sync error:', sbErr.message);
+      }
+    }
 
     const updated = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(runId);
 
@@ -527,8 +699,12 @@ router.get('/my-payslips', authenticate, async (req, res) => {
 });
 
 // GET /api/payroll/payslip/:id (Individual detailed printable payslip)
-router.get('/payslip/:id', authenticate, (req, res) => {
+router.get('/payslip/:id', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const slipId = parseInt(req.params.id, 10);
     const payslip = db.prepare(`
       SELECT p.*, e.first_name, e.last_name, e.job_title, e.department, e.employee_code,

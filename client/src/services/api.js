@@ -164,6 +164,9 @@ export const api = {
     updatePayslip: (id, data) => request(`/payroll/payslips/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data)
+    }),
+    deletePayslip: (id) => request(`/payroll/payslips/${id}`, {
+      method: 'DELETE'
     })
   },
 

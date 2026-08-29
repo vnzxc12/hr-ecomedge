@@ -567,14 +567,18 @@ async function syncFromSupabase(force = false) {
         { data: leaves },
         { data: balances },
         { data: timeLogs },
-        { data: remoteAudits }
+        { data: remoteAudits },
+        { data: remotePayrolls },
+        { data: remotePayslips }
       ] = await Promise.all([
         supabase.from('employees').select('*'),
         supabase.from('users').select('*'),
         supabase.from('leaves').select('*'),
         supabase.from('leave_balances').select('*'),
         supabase.from('time_logs').select('*'),
-        supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200)
+        supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200),
+        supabase.from('payrolls').select('*').order('id', { ascending: true }),
+        supabase.from('payslips').select('*').order('id', { ascending: true })
       ]);
 
       if (empErr || userErr) {
@@ -648,6 +652,56 @@ async function syncFromSupabase(force = false) {
         `);
         for (const t of timeLogs) {
           insertLog.run(t.id, t.employee_id, t.date, t.clock_in, t.break_start || null, t.break_end || null, t.clock_out || null, t.total_hours || 0, t.break_duration_mins || 0, t.overtime_hours || 0, t.status || 'clocked_in', t.notes || null);
+        }
+      }
+
+      // Sync remote payroll runs down to SQLite
+      if (Array.isArray(remotePayrolls) && remotePayrolls.length > 0) {
+        const insertPayroll = sqlite.prepare(`
+          INSERT OR REPLACE INTO payrolls (id, payroll_code, period_start, period_end, status, total_gross, total_deductions, total_net, created_by, payment_date, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const p of remotePayrolls) {
+          insertPayroll.run(
+            p.id,
+            p.payroll_code,
+            p.period_start,
+            p.period_end,
+            p.status || 'draft',
+            parseFloat(p.total_gross) || 0,
+            parseFloat(p.total_deductions) || 0,
+            parseFloat(p.total_net) || 0,
+            p.created_by || null,
+            p.payment_date || null,
+            p.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote payslips down to SQLite
+      if (Array.isArray(remotePayslips) && remotePayslips.length > 0) {
+        const insertSlip = sqlite.prepare(`
+          INSERT OR REPLACE INTO payslips (id, payroll_id, employee_id, basic_pay, overtime_pay, allowances, gross_pay, tax_deduction, social_deductions, other_deductions, net_pay, total_hours_worked, overtime_hours, payment_status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const s of remotePayslips) {
+          insertSlip.run(
+            s.id,
+            s.payroll_id,
+            s.employee_id,
+            parseFloat(s.basic_pay) || 0,
+            parseFloat(s.overtime_pay) || 0,
+            parseFloat(s.allowances) || 0,
+            parseFloat(s.gross_pay) || 0,
+            parseFloat(s.tax_deduction) || 0,
+            parseFloat(s.social_deductions) || 0,
+            parseFloat(s.other_deductions) || 0,
+            parseFloat(s.net_pay) || 0,
+            parseFloat(s.total_hours_worked) || 0,
+            parseFloat(s.overtime_hours) || 0,
+            s.payment_status || 'unpaid',
+            s.created_at || new Date().toISOString()
+          );
         }
       }
 

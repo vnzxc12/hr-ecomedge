@@ -131,6 +131,22 @@ export default function Payroll() {
     }
   };
 
+  const handleDeleteSlip = async (slipId, empName) => {
+    if (!window.confirm(`Delete and remove payslip for ${empName} from this draft payroll batch?`)) return;
+    try {
+      const res = await api.payroll.deletePayslip(slipId);
+      showToast(res.message || 'Payslip deleted.', 'info');
+      if (selectedRun?.id) {
+        const batchRes = await api.payroll.getRunById(selectedRun.id);
+        setSelectedRun(batchRes.run);
+        setRunSlips(batchRes.payslips || []);
+      }
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
   const handleUpdateStatus = async (runId, newStatus) => {
     try {
       const res = await api.payroll.updateStatus(runId, newStatus);
@@ -670,16 +686,26 @@ export default function Payroll() {
                         <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                           <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
                             {selectedRun.status === 'draft' && (
-                              <button
-                                className="btn btn-secondary btn-sm"
-                                onClick={() => handleOpenEditSlip(slip)}
-                                title="Edit Deductions, Taxes & Pay"
-                              >
-                                <Edit2 size={13} />
-                                <span>Edit</span>
-                              </button>
+                              <>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  onClick={() => handleOpenEditSlip(slip)}
+                                  title="Edit Deductions, Taxes & Pay"
+                                >
+                                  <Edit2 size={13} />
+                                  <span>Edit</span>
+                                </button>
+                                <button
+                                  className="btn btn-danger btn-sm"
+                                  onClick={() => handleDeleteSlip(slip.id, `${slip.first_name} ${slip.last_name}`)}
+                                  title="Delete Payslip from Batch"
+                                  style={{ padding: '0.35rem 0.5rem' }}
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </>
                             )}
-                            <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)} title="Print Payslip">
+                            <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)} title="Print / View Payslip Voucher">
                               <Printer size={14} />
                             </button>
                           </div>
