@@ -1627,10 +1627,13 @@ export default function Employees() {
 
       {/* Edit Employee Modal */}
       {showEditModal && (
-        <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+        <div className="modal-backdrop">
           <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontWeight: 800 }}>Edit Employee Profile</h3>
+              <button type="button" className="btn-icon" onClick={() => setShowEditModal(false)} title="Close">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleUpdateEmployee}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
@@ -1783,7 +1786,7 @@ export default function Employees() {
                       onChange={(e) => setEditForm({ ...editForm, employment_type: e.target.value })}
                     >
                       <option value="full_time">Full Time</option>
-                      <option value="part_time">Part Time</option>
+                      <option value="part_time">Part Time (Hourly Rate)</option>
                       <option value="contract">Contract</option>
                     </select>
                   </div>
@@ -1791,13 +1794,37 @@ export default function Employees() {
 
                 <div className="form-row">
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label">Monthly Salary (PHP)</label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      value={editForm.monthly_salary}
-                      onChange={(e) => setEditForm({ ...editForm, monthly_salary: parseFloat(e.target.value) || 0, hourly_rate: (parseFloat(e.target.value) || 0) / 160 })}
-                    />
+                    <label className="form-label" style={{ fontWeight: 700 }}>
+                      {editForm.employment_type === 'part_time' ? 'Hourly Rate (PHP/hr) *' : 'Monthly Salary (PHP) *'}
+                    </label>
+                    {editForm.employment_type === 'part_time' ? (
+                      <input
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        className="form-control"
+                        placeholder="e.g. 150.00 / hr"
+                        value={editForm.hourly_rate || ''}
+                        onChange={(e) => {
+                          const hr = parseFloat(e.target.value) || 0;
+                          setEditForm({ ...editForm, hourly_rate: hr, monthly_salary: 0 });
+                        }}
+                        required
+                      />
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        className="form-control"
+                        placeholder="e.g. 25000"
+                        value={editForm.monthly_salary || ''}
+                        onChange={(e) => {
+                          const sal = parseFloat(e.target.value) || 0;
+                          setEditForm({ ...editForm, monthly_salary: sal, hourly_rate: sal > 0 ? parseFloat((sal / 160).toFixed(2)) : 0 });
+                        }}
+                        required
+                      />
+                    )}
                   </div>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Hire Date</label>

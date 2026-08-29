@@ -40,7 +40,7 @@ async function authenticate(req, res, next) {
         let u = null;
         try {
           u = db.prepare(`
-            SELECT u.id, u.username, u.role, u.employee_id, u.avatar_url,
+            SELECT u.id, u.username, u.role, u.employee_id, COALESCE(u.avatar_url, e.avatar_url) as avatar_url,
                    e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.hourly_rate, e.monthly_salary, e.employment_status
             FROM users u
             LEFT JOIN employees e ON u.employee_id = e.id
@@ -85,7 +85,7 @@ async function authenticate(req, res, next) {
               }
 
               u = db.prepare(`
-                SELECT u.id, u.username, u.role, u.employee_id, u.avatar_url,
+                SELECT u.id, u.username, u.role, u.employee_id, COALESCE(u.avatar_url, e.avatar_url) as avatar_url,
                        e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.hourly_rate, e.monthly_salary, e.employment_status
                 FROM users u
                 LEFT JOIN employees e ON u.employee_id = e.id
