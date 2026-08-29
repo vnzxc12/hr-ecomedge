@@ -141,6 +141,9 @@ export const api = {
     }),
     getRuns: () => request('/payroll/runs'),
     getRunById: (id) => request(`/payroll/runs/${id}`),
+    deleteRun: (id) => request(`/payroll/runs/${id}`, {
+      method: 'DELETE'
+    }),
     updateStatus: (id, status) => request(`/payroll/runs/${id}/status`, {
       method: 'PUT',
       body: JSON.stringify({ status })

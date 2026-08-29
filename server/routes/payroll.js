@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
 const { recordAudit } = require('../middleware/auditMiddleware');
 
 // POST /api/payroll/generate (Manager runs automated payroll computation)
-router.post('/generate', authenticate, requireManager, (req, res) => {
+router.post('/generate', authenticate, requireManager, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const { period_start, period_end } = req.body;
 
     if (!period_start || !period_end) {
@@ -41,7 +45,7 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
 
       createdPayrollId = pResult.lastInsertRowid;
 
-      // 2. Calculate for each employee
+      // 2. Calculate for each employee based on actual attendance / time logs / paid leaves
       const insertSlip = db.prepare(`
         INSERT INTO payslips (
           payroll_id, employee_id, basic_pay, overtime_pay, allowances,
@@ -51,7 +55,7 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
       `);
 
       for (const emp of employees) {
-        // Aggregate time logs in date range
+        // A. Aggregate punch clock time logs in period
         const timeStats = db.prepare(`
           SELECT 
             COALESCE(SUM(total_hours), 0) as total_hours,
@@ -60,32 +64,78 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
           WHERE employee_id = ? AND date >= ? AND date <= ?
         `).get(emp.id, period_start, period_end);
 
-        const hoursWorked = timeStats.total_hours || (emp.monthly_salary > 0 ? 160.00 : 0.00);
-        const overtimeHours = timeStats.total_overtime || 0.00;
-        const regularHours = Math.max(0, hoursWorked - overtimeHours);
+        // B. Aggregate approved project timesheets in period
+        const tsStats = db.prepare(`
+          SELECT 
+            COALESCE(SUM(total_hours), 0) as ts_hours,
+            COALESCE(SUM(overtime_hours), 0) as ts_overtime
+          FROM timesheets
+          WHERE employee_id = ? AND date >= ? AND date <= ? AND status = 'approved'
+        `).get(emp.id, period_start, period_end);
 
-        let basicPay = 0;
-        const effectiveHourlyRate = emp.hourly_rate > 0 ? emp.hourly_rate : (emp.monthly_salary > 0 ? (emp.monthly_salary / 160) : 25.00);
+        // C. Aggregate approved paid leave days in period
+        const leaveStats = db.prepare(`
+          SELECT COALESCE(SUM(days_count), 0) as paid_leave_days
+          FROM leaves
+          WHERE employee_id = ? AND status = 'approved'
+            AND start_date <= ? AND end_date >= ?
+        `).get(emp.id, period_end, period_start);
 
-        if (emp.monthly_salary > 0) {
-          basicPay = emp.monthly_salary;
-        } else {
-          basicPay = regularHours * effectiveHourlyRate;
+        const punchHours = parseFloat(Number(timeStats.total_hours || 0).toFixed(2));
+        const tsHours = parseFloat(Number(tsStats.ts_hours || 0).toFixed(2));
+        const paidLeaveDays = Number(leaveStats.paid_leave_days || 0);
+        const paidLeaveHours = paidLeaveDays * 8.0;
+
+        // Total credited hours
+        const rawWorkedHours = Math.max(punchHours, tsHours);
+        const overtimeHours = parseFloat(Math.max(timeStats.total_overtime || 0, tsStats.ts_overtime || 0).toFixed(2));
+        const regularWorkedHours = Math.max(0, rawWorkedHours - overtimeHours);
+        const totalCreditedRegularHours = regularWorkedHours + paidLeaveHours;
+        const totalHoursWorked = parseFloat((totalCreditedRegularHours + overtimeHours).toFixed(2));
+
+        let basicPay = 0.00;
+        let overtimePay = 0.00;
+        let allowances = 0.00;
+        let grossPay = 0.00;
+        let taxDeduction = 0.00;
+        let socialDeductions = 0.00;
+        const otherDeductions = 0.00;
+        let netPay = 0.00;
+
+        // Standard monthly working benchmark is 160.0 hours
+        const standardHoursBenchmark = 160.0;
+        const standardMonthlyAllowance = 1500.00;
+
+        // STRICT ATTENDANCE & NO-WORK NO-PAY RULE:
+        // If an employee logged 0 hours and has 0 approved paid leaves, total compensation is ₱0.00
+        if (totalHoursWorked > 0) {
+          if (emp.hourly_rate > 0) {
+            const rate = emp.hourly_rate;
+            basicPay = totalCreditedRegularHours * rate;
+            overtimePay = overtimeHours * (rate * 1.5);
+            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+          } else if (emp.monthly_salary > 0) {
+            const effectiveHourlyRate = emp.monthly_salary / standardHoursBenchmark;
+            const attendanceRatio = Math.min(1.0, totalCreditedRegularHours / standardHoursBenchmark);
+            basicPay = attendanceRatio * emp.monthly_salary;
+            overtimePay = overtimeHours * (effectiveHourlyRate * 1.5);
+            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+          } else {
+            const fallbackRate = 25.00;
+            basicPay = totalCreditedRegularHours * fallbackRate;
+            overtimePay = overtimeHours * (fallbackRate * 1.5);
+            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+          }
+
+          grossPay = basicPay + overtimePay + allowances;
+          taxDeduction = grossPay * 0.08; // 8% standard withholding
+          socialDeductions = grossPay * 0.04; // 4% health/social fund
+          const totalDeductions = taxDeduction + socialDeductions + otherDeductions;
+          netPay = Math.max(0, grossPay - totalDeductions);
         }
 
-        const overtimePay = overtimeHours * (effectiveHourlyRate * 1.5);
-        const allowances = 1500.00; // Standard Philippine transport/meal allowance (PHP ₱1,500)
-
-        const grossPay = basicPay + overtimePay + allowances;
-        const taxDeduction = grossPay * 0.08; // 8% standard withholding
-        const socialDeductions = grossPay * 0.04; // 4% health/retirement fund
-        const otherDeductions = 0.00;
-
-        const totalDeductions = taxDeduction + socialDeductions + otherDeductions;
-        const netPay = grossPay - totalDeductions;
-
         totalGrossSum += grossPay;
-        totalDeductionsSum += totalDeductions;
+        totalDeductionsSum += (taxDeduction + socialDeductions + otherDeductions);
         totalNetSum += netPay;
 
         insertSlip.run(
@@ -99,7 +149,7 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
           parseFloat(socialDeductions.toFixed(2)),
           parseFloat(otherDeductions.toFixed(2)),
           parseFloat(netPay.toFixed(2)),
-          parseFloat(hoursWorked.toFixed(2)),
+          parseFloat(totalHoursWorked.toFixed(2)),
           parseFloat(overtimeHours.toFixed(2))
         );
       }
@@ -152,8 +202,12 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
 });
 
 // GET /api/payroll/runs (Manager list)
-router.get('/runs', authenticate, requireManager, (req, res) => {
+router.get('/runs', authenticate, requireManager, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const runs = db.prepare(`
       SELECT p.*, u.username as created_by_username,
              (SELECT COUNT(*) FROM payslips WHERE payroll_id = p.id) as employee_count
@@ -199,6 +253,31 @@ router.get('/runs/:id', authenticate, requireManager, (req, res) => {
   }
 });
 
+// DELETE /api/payroll/runs/:id (Manager delete draft run)
+router.delete('/runs/:id', authenticate, requireManager, (req, res) => {
+  try {
+    const runId = parseInt(req.params.id, 10);
+    const run = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(runId);
+    if (!run) {
+      return res.status(404).json({ error: 'Payroll run not found.' });
+    }
+
+    if (run.status === 'paid') {
+      return res.status(400).json({ error: 'Cannot delete a payroll run that has already been paid and disbursed.' });
+    }
+
+    db.transaction(() => {
+      db.prepare('DELETE FROM payslips WHERE payroll_id = ?').run(runId);
+      db.prepare('DELETE FROM payrolls WHERE id = ?').run(runId);
+    })();
+
+    res.json({ message: `Payroll run ${run.payroll_code} has been deleted.` });
+  } catch (err) {
+    console.error('Delete payroll run error:', err);
+    res.status(500).json({ error: 'Failed to delete payroll run.' });
+  }
+});
+
 // PUT /api/payroll/runs/:id/status (Manager approve or pay)
 router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
   try {
@@ -210,7 +289,6 @@ router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
     }
 
     const today = new Date().toISOString().split('T')[0];
-
     const beforePayroll = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(runId);
 
     db.transaction(() => {
@@ -244,8 +322,12 @@ router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
 });
 
 // GET /api/payroll/my-payslips (Employee portal)
-router.get('/my-payslips', authenticate, (req, res) => {
+router.get('/my-payslips', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const employeeId = req.user.employee_id;
     if (!employeeId) {
       return res.json({ payslips: [] });

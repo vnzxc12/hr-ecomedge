@@ -14,7 +14,9 @@ import {
   ArrowRight,
   X,
   CreditCard,
-  ShieldCheck
+  ShieldCheck,
+  Trash2,
+  Loader2
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
@@ -82,6 +84,18 @@ export default function Payroll() {
       const res = await api.payroll.getRunById(run.id);
       setSelectedRun(res.run);
       setRunSlips(res.payslips || []);
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
+  const handleDeleteRun = async (runId) => {
+    if (!window.confirm('Delete this draft payroll run? You can regenerate it with updated time logs.')) return;
+    try {
+      const res = await api.payroll.deleteRun(runId);
+      showToast(res.message, 'info');
+      setShowRunDetailModal(false);
+      loadData();
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -191,13 +205,26 @@ export default function Payroll() {
                       </td>
                       <td>{run.payment_date || 'Pending'}</td>
                       <td style={{ textAlign: 'right' }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => handleOpenRun(run)}
-                        >
-                          <Eye size={14} />
-                          <span>View Slips</span>
-                        </button>
+                        <div style={{ display: 'inline-flex', gap: '0.4rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                          <button
+                            className="btn btn-secondary btn-sm"
+                            onClick={() => handleOpenRun(run)}
+                            title="View Payslips"
+                          >
+                            <Eye size={14} />
+                            <span>View Slips</span>
+                          </button>
+                          {run.status === 'draft' && (
+                            <button
+                              className="btn-icon"
+                              onClick={() => handleDeleteRun(run.id)}
+                              title="Delete Draft Run"
+                              style={{ color: 'var(--danger)', width: '32px', height: '32px' }}
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -390,46 +417,63 @@ export default function Payroll() {
               </div>
 
               {/* Slips table */}
-              <table className="table">
-                <thead>
-                  <tr>
-                    <th>Employee</th>
-                    <th>Basic Pay</th>
-                    <th>Overtime</th>
-                    <th>Gross</th>
-                    <th>Deductions</th>
-                    <th>Net Pay</th>
-                    <th style={{ textAlign: 'right' }}>Slip</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {runSlips.map((slip) => (
-                    <tr key={slip.id}>
-                      <td>
-                        <div style={{ fontWeight: '700' }}>{slip.first_name} {slip.last_name}</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{slip.employee_code} • {slip.department}</div>
-                      </td>
-                      <td>₱{slip.basic_pay.toLocaleString()}</td>
-                      <td>+₱{slip.overtime_pay.toLocaleString()}</td>
-                      <td style={{ fontWeight: '700' }}>₱{slip.gross_pay.toLocaleString()}</td>
-                      <td style={{ color: 'var(--danger)' }}>
-                        -₱{(slip.tax_deduction + slip.social_deductions + slip.other_deductions).toLocaleString()}
-                      </td>
-                      <td style={{ fontWeight: '800', color: 'var(--success)' }}>
-                        ₱{slip.net_pay.toLocaleString()}
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)}>
-                          <Printer size={14} />
-                        </button>
-                      </td>
+              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Logged Hours</th>
+                      <th>Basic Pay</th>
+                      <th>Overtime</th>
+                      <th>Allowances</th>
+                      <th>Gross</th>
+                      <th>Deductions</th>
+                      <th>Net Pay</th>
+                      <th style={{ textAlign: 'right' }}>Slip</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {runSlips.map((slip) => (
+                      <tr key={slip.id}>
+                        <td>
+                          <div style={{ fontWeight: '700' }}>{slip.first_name} {slip.last_name}</div>
+                          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{slip.employee_code} • {slip.department}</div>
+                        </td>
+                        <td>
+                          <span style={{ fontWeight: 700, color: (slip.total_hours_worked || 0) > 0 ? 'var(--brand-green)' : 'var(--text-muted)' }}>
+                            {slip.total_hours_worked || 0} hrs
+                          </span>
+                        </td>
+                        <td>₱{(slip.basic_pay || 0).toLocaleString()}</td>
+                        <td>+₱{(slip.overtime_pay || 0).toLocaleString()}</td>
+                        <td>+₱{(slip.allowances || 0).toLocaleString()}</td>
+                        <td style={{ fontWeight: '700' }}>₱{(slip.gross_pay || 0).toLocaleString()}</td>
+                        <td style={{ color: 'var(--danger)' }}>
+                          -₱{((slip.tax_deduction || 0) + (slip.social_deductions || 0) + (slip.other_deductions || 0)).toLocaleString()}
+                        </td>
+                        <td style={{ fontWeight: '800', color: 'var(--success)' }}>
+                          ₱{(slip.net_pay || 0).toLocaleString()}
+                        </td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-secondary btn-sm" onClick={() => handleViewPayslip(slip.id)}>
+                            <Printer size={14} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            <div className="modal-footer">
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                {selectedRun.status === 'draft' && (
+                  <button className="btn btn-danger btn-sm" onClick={() => handleDeleteRun(selectedRun.id)}>
+                    <Trash2 size={14} /> Delete Draft Run
+                  </button>
+                )}
+              </div>
               <button className="btn btn-secondary" onClick={() => setShowRunDetailModal(false)}>
                 Close
               </button>
