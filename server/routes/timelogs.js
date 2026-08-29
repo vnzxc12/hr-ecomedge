@@ -180,7 +180,7 @@ router.post('/punch', authenticate, async (req, res) => {
     return res.status(400).json({ error: 'Invalid punch action.' });
   } catch (err) {
     console.error('Punch action error:', err);
-    res.status(500).json({ error: 'Failed to record punch action.' });
+    res.status(500).json({ error: err.message || 'Failed to record punch action.' });
   }
 });
 
