@@ -768,10 +768,13 @@ export default function Employees() {
 
         {/* Upload Document Modal */}
         {showDocUploadModal && (
-          <div className="modal-backdrop" onClick={() => setShowDocUploadModal(false)}>
+          <div className="modal-backdrop">
             <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-              <div className="modal-header">
+              <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontWeight: 800 }}>Upload Employee Document</h3>
+                <button type="button" className="btn-icon" onClick={() => setShowDocUploadModal(false)} title="Close">
+                  <X size={18} />
+                </button>
               </div>
               <form onSubmit={handleUploadDocument}>
                 <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -836,10 +839,13 @@ export default function Employees() {
 
         {/* Edit Employee Modal */}
         {showEditModal && (
-          <div className="modal-backdrop" onClick={() => setShowEditModal(false)}>
+          <div className="modal-backdrop">
             <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
+              <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h3 style={{ margin: 0, fontWeight: 800 }}>Edit Employee Profile</h3>
+                <button type="button" className="btn-icon" onClick={() => setShowEditModal(false)} title="Close">
+                  <X size={18} />
+                </button>
               </div>
               <form onSubmit={handleUpdateEmployee}>
                 <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
@@ -1360,10 +1366,13 @@ export default function Employees() {
 
       {/* Add Employee Modal */}
       {showAddModal && (
-        <div className="modal-backdrop" onClick={() => setShowAddModal(false)}>
+        <div className="modal-backdrop">
           <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontWeight: 800 }}>Onboard New Employee</h3>
+              <button type="button" className="btn-icon" onClick={() => setShowAddModal(false)} title="Close">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleCreateEmployee}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem', maxHeight: '75vh', overflowY: 'auto' }}>
