@@ -597,312 +597,322 @@ async function syncFromSupabase(force = false) {
         return;
       }
 
-    sqlite.transaction(() => {
-      if (Array.isArray(employees) && employees.length > 0) {
-        const insertEmp = sqlite.prepare(`
-          INSERT INTO employees (
-            id, employee_code, first_name, last_name, job_title, department,
-            employment_status, employment_type, hire_date, hourly_rate, monthly_salary,
-            phone, address, emergency_contact_name, emergency_contact_phone, bank_name,
-            bank_account_number, avatar_url, team_id, designation_id, manager_id
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT(id) DO UPDATE SET
-            employee_code = EXCLUDED.employee_code,
-            first_name = EXCLUDED.first_name,
-            last_name = EXCLUDED.last_name,
-            job_title = EXCLUDED.job_title,
-            department = EXCLUDED.department,
-            employment_status = EXCLUDED.employment_status,
-            employment_type = EXCLUDED.employment_type,
-            hire_date = EXCLUDED.hire_date,
-            hourly_rate = EXCLUDED.hourly_rate,
-            monthly_salary = EXCLUDED.monthly_salary,
-            phone = EXCLUDED.phone,
-            address = EXCLUDED.address,
-            emergency_contact_name = EXCLUDED.emergency_contact_name,
-            emergency_contact_phone = EXCLUDED.emergency_contact_phone,
-            bank_name = EXCLUDED.bank_name,
-            bank_account_number = EXCLUDED.bank_account_number,
-            avatar_url = EXCLUDED.avatar_url,
-            team_id = COALESCE(EXCLUDED.team_id, employees.team_id),
-            designation_id = COALESCE(EXCLUDED.designation_id, employees.designation_id),
-            manager_id = COALESCE(EXCLUDED.manager_id, employees.manager_id)
-        `);
-        for (const e of employees) {
-          insertEmp.run(
-            e.id,
-            e.employee_code || `EMP-${String(e.id).padStart(3, '0')}`,
-            e.first_name,
-            e.last_name,
-            e.job_title,
-            e.department,
-            e.employment_status || 'active',
-            e.employment_type || 'full_time',
-            e.hire_date || '2026-01-01',
-            parseFloat(e.hourly_rate) || 0,
-            parseFloat(e.monthly_salary) || 0,
-            e.phone || null,
-            e.address || null,
-            e.emergency_contact_name || null,
-            e.emergency_contact_phone || null,
-            e.bank_name || null,
-            e.bank_account_number || null,
-            e.avatar_url || null,
-            e.team_id || null,
-            e.designation_id || null,
-            e.manager_id || null
-          );
-        }
-      }
+      sqlite.pragma('foreign_keys = OFF');
+      try {
+        sqlite.transaction(() => {
+          // 1. Sync remote teams down to SQLite
+          if (Array.isArray(remoteTeams) && remoteTeams.length > 0) {
+            const insertTeam = sqlite.prepare(`
+              INSERT OR REPLACE INTO teams (id, name, description, department, team_lead_id, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const t of remoteTeams) {
+              insertTeam.run(
+                t.id,
+                t.name,
+                t.description || '',
+                t.department,
+                t.team_lead_id || null,
+                t.status || 'active',
+                t.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      if (Array.isArray(users) && users.length > 0) {
-        const insertUser = sqlite.prepare(`
-          INSERT OR REPLACE INTO users (id, username, password_hash, role, employee_id, avatar_url)
-          VALUES (?, ?, ?, ?, ?, ?)
-        `);
-        for (const u of users) {
-          insertUser.run(u.id, u.username, u.password_hash, u.role || 'employee', u.employee_id || null, u.avatar_url || null);
-        }
-      }
+          // 2. Sync remote designations down to SQLite
+          if (Array.isArray(remoteDesignations) && remoteDesignations.length > 0) {
+            const insertDesig = sqlite.prepare(`
+              INSERT OR REPLACE INTO designations (id, title, department, level, description, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const d of remoteDesignations) {
+              insertDesig.run(
+                d.id,
+                d.title,
+                d.department,
+                d.level || 'Mid-Level',
+                d.description || '',
+                d.status || 'active',
+                d.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      if (Array.isArray(balances) && balances.length > 0) {
-        const insertBal = sqlite.prepare(`
-          INSERT OR REPLACE INTO leave_balances (id, employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const b of balances) {
-          insertBal.run(b.id, b.employee_id, b.year, b.vacation_days || 0, b.sick_days || 0, b.emergency_days || 0, b.vacation_used || 0, b.sick_used || 0, b.emergency_used || 0);
-        }
-      }
+          // 3. Sync remote employees down to SQLite
+          if (Array.isArray(employees) && employees.length > 0) {
+            const insertEmp = sqlite.prepare(`
+              INSERT INTO employees (
+                id, employee_code, first_name, last_name, job_title, department,
+                employment_status, employment_type, hire_date, hourly_rate, monthly_salary,
+                phone, address, emergency_contact_name, emergency_contact_phone, bank_name,
+                bank_account_number, avatar_url, team_id, designation_id, manager_id
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                employee_code = EXCLUDED.employee_code,
+                first_name = EXCLUDED.first_name,
+                last_name = EXCLUDED.last_name,
+                job_title = EXCLUDED.job_title,
+                department = EXCLUDED.department,
+                employment_status = EXCLUDED.employment_status,
+                employment_type = EXCLUDED.employment_type,
+                hire_date = EXCLUDED.hire_date,
+                hourly_rate = EXCLUDED.hourly_rate,
+                monthly_salary = EXCLUDED.monthly_salary,
+                phone = EXCLUDED.phone,
+                address = EXCLUDED.address,
+                emergency_contact_name = EXCLUDED.emergency_contact_name,
+                emergency_contact_phone = EXCLUDED.emergency_contact_phone,
+                bank_name = EXCLUDED.bank_name,
+                bank_account_number = EXCLUDED.bank_account_number,
+                avatar_url = EXCLUDED.avatar_url,
+                team_id = COALESCE(EXCLUDED.team_id, employees.team_id),
+                designation_id = COALESCE(EXCLUDED.designation_id, employees.designation_id),
+                manager_id = COALESCE(EXCLUDED.manager_id, employees.manager_id)
+            `);
+            for (const e of employees) {
+              insertEmp.run(
+                e.id,
+                e.employee_code || `EMP-${String(e.id).padStart(3, '0')}`,
+                e.first_name,
+                e.last_name,
+                e.job_title,
+                e.department,
+                e.employment_status || 'active',
+                e.employment_type || 'full_time',
+                e.hire_date || '2026-01-01',
+                parseFloat(e.hourly_rate) || 0,
+                parseFloat(e.monthly_salary) || 0,
+                e.phone || null,
+                e.address || null,
+                e.emergency_contact_name || null,
+                e.emergency_contact_phone || null,
+                e.bank_name || null,
+                e.bank_account_number || null,
+                e.avatar_url || null,
+                e.team_id || null,
+                e.designation_id || null,
+                e.manager_id || null
+              );
+            }
+          }
 
-      if (Array.isArray(leaves) && leaves.length > 0) {
-        const insertLeave = sqlite.prepare(`
-          INSERT OR REPLACE INTO leaves (id, employee_id, leave_type, start_date, end_date, days_count, reason, status, reviewed_by, review_notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const l of leaves) {
-          insertLeave.run(l.id, l.employee_id, l.leave_type, l.start_date, l.end_date, l.days_count, l.reason, l.status, l.reviewed_by || null, l.review_notes || null);
-        }
-      }
+          // 4. Sync remote users down to SQLite
+          if (Array.isArray(users) && users.length > 0) {
+            const insertUser = sqlite.prepare(`
+              INSERT OR REPLACE INTO users (id, username, password_hash, role, employee_id, avatar_url)
+              VALUES (?, ?, ?, ?, ?, ?)
+            `);
+            for (const u of users) {
+              insertUser.run(u.id, u.username, u.password_hash, u.role || 'employee', u.employee_id || null, u.avatar_url || null);
+            }
+          }
 
-      if (Array.isArray(timeLogs) && timeLogs.length > 0) {
-        const insertLog = sqlite.prepare(`
-          INSERT OR REPLACE INTO time_logs (id, employee_id, date, clock_in, break_start, break_end, clock_out, total_hours, break_duration_mins, overtime_hours, status, notes)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const t of timeLogs) {
-          insertLog.run(t.id, t.employee_id, t.date, t.clock_in, t.break_start || null, t.break_end || null, t.clock_out || null, t.total_hours || 0, t.break_duration_mins || 0, t.overtime_hours || 0, t.status || 'clocked_in', t.notes || null);
-        }
-      }
+          // 5. Sync remote leave balances
+          if (Array.isArray(balances) && balances.length > 0) {
+            const insertBal = sqlite.prepare(`
+              INSERT OR REPLACE INTO leave_balances (id, employee_id, year, vacation_days, sick_days, emergency_days, vacation_used, sick_used, emergency_used)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const b of balances) {
+              insertBal.run(b.id, b.employee_id, b.year, b.vacation_days || 0, b.sick_days || 0, b.emergency_days || 0, b.vacation_used || 0, b.sick_used || 0, b.emergency_used || 0);
+            }
+          }
 
-      // Sync remote payroll runs down to SQLite
-      if (Array.isArray(remotePayrolls) && remotePayrolls.length > 0) {
-        const insertPayroll = sqlite.prepare(`
-          INSERT OR REPLACE INTO payrolls (id, payroll_code, period_start, period_end, status, total_gross, total_deductions, total_net, created_by, payment_date, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const p of remotePayrolls) {
-          insertPayroll.run(
-            p.id,
-            p.payroll_code,
-            p.period_start,
-            p.period_end,
-            p.status || 'draft',
-            parseFloat(p.total_gross) || 0,
-            parseFloat(p.total_deductions) || 0,
-            parseFloat(p.total_net) || 0,
-            p.created_by || null,
-            p.payment_date || null,
-            p.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 6. Sync remote leaves
+          if (Array.isArray(leaves) && leaves.length > 0) {
+            const insertLeave = sqlite.prepare(`
+              INSERT OR REPLACE INTO leaves (id, employee_id, leave_type, start_date, end_date, days_count, reason, status, reviewed_by, review_notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const l of leaves) {
+              insertLeave.run(l.id, l.employee_id, l.leave_type, l.start_date, l.end_date, l.days_count, l.reason, l.status, l.reviewed_by || null, l.review_notes || null);
+            }
+          }
 
-      // Sync remote payslips down to SQLite
-      if (Array.isArray(remotePayslips) && remotePayslips.length > 0) {
-        const insertSlip = sqlite.prepare(`
-          INSERT OR REPLACE INTO payslips (id, payroll_id, employee_id, basic_pay, overtime_pay, allowances, gross_pay, tax_deduction, social_deductions, other_deductions, net_pay, total_hours_worked, overtime_hours, payment_status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const s of remotePayslips) {
-          insertSlip.run(
-            s.id,
-            s.payroll_id,
-            s.employee_id,
-            parseFloat(s.basic_pay) || 0,
-            parseFloat(s.overtime_pay) || 0,
-            parseFloat(s.allowances) || 0,
-            parseFloat(s.gross_pay) || 0,
-            parseFloat(s.tax_deduction) || 0,
-            parseFloat(s.social_deductions) || 0,
-            parseFloat(s.other_deductions) || 0,
-            parseFloat(s.net_pay) || 0,
-            parseFloat(s.total_hours_worked) || 0,
-            parseFloat(s.overtime_hours) || 0,
-            s.payment_status || 'unpaid',
-            s.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 7. Sync remote time logs
+          if (Array.isArray(timeLogs) && timeLogs.length > 0) {
+            const insertLog = sqlite.prepare(`
+              INSERT OR REPLACE INTO time_logs (id, employee_id, date, clock_in, break_start, break_end, clock_out, total_hours, break_duration_mins, overtime_hours, status, notes)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const t of timeLogs) {
+              insertLog.run(t.id, t.employee_id, t.date, t.clock_in, t.break_start || null, t.break_end || null, t.clock_out || null, t.total_hours || 0, t.break_duration_mins || 0, t.overtime_hours || 0, t.status || 'clocked_in', t.notes || null);
+            }
+          }
 
-      // Sync remote teams down to SQLite
-      if (Array.isArray(remoteTeams) && remoteTeams.length > 0) {
-        const insertTeam = sqlite.prepare(`
-          INSERT OR REPLACE INTO teams (id, name, description, department, team_lead_id, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const t of remoteTeams) {
-          insertTeam.run(
-            t.id,
-            t.name,
-            t.description || '',
-            t.department,
-            t.team_lead_id || null,
-            t.status || 'active',
-            t.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 8. Sync remote payroll runs down to SQLite
+          if (Array.isArray(remotePayrolls) && remotePayrolls.length > 0) {
+            const insertPayroll = sqlite.prepare(`
+              INSERT OR REPLACE INTO payrolls (id, payroll_code, period_start, period_end, status, total_gross, total_deductions, total_net, created_by, payment_date, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const p of remotePayrolls) {
+              insertPayroll.run(
+                p.id,
+                p.payroll_code,
+                p.period_start,
+                p.period_end,
+                p.status || 'draft',
+                parseFloat(p.total_gross) || 0,
+                parseFloat(p.total_deductions) || 0,
+                parseFloat(p.total_net) || 0,
+                p.created_by || null,
+                p.payment_date || null,
+                p.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      // Sync remote designations down to SQLite
-      if (Array.isArray(remoteDesignations) && remoteDesignations.length > 0) {
-        const insertDesig = sqlite.prepare(`
-          INSERT OR REPLACE INTO designations (id, title, department, level, description, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const d of remoteDesignations) {
-          insertDesig.run(
-            d.id,
-            d.title,
-            d.department,
-            d.level || 'Mid-Level',
-            d.description || '',
-            d.status || 'active',
-            d.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 9. Sync remote payslips down to SQLite
+          if (Array.isArray(remotePayslips) && remotePayslips.length > 0) {
+            const insertSlip = sqlite.prepare(`
+              INSERT OR REPLACE INTO payslips (id, payroll_id, employee_id, basic_pay, overtime_pay, allowances, gross_pay, tax_deduction, social_deductions, other_deductions, net_pay, total_hours_worked, overtime_hours, payment_status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const s of remotePayslips) {
+              insertSlip.run(
+                s.id,
+                s.payroll_id,
+                s.employee_id,
+                parseFloat(s.basic_pay) || 0,
+                parseFloat(s.overtime_pay) || 0,
+                parseFloat(s.allowances) || 0,
+                parseFloat(s.gross_pay) || 0,
+                parseFloat(s.tax_deduction) || 0,
+                parseFloat(s.social_deductions) || 0,
+                parseFloat(s.other_deductions) || 0,
+                parseFloat(s.net_pay) || 0,
+                parseFloat(s.total_hours_worked) || 0,
+                parseFloat(s.overtime_hours) || 0,
+                s.payment_status || 'unpaid',
+                s.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      // Sync remote clients down to SQLite
-      if (Array.isArray(remoteClients) && remoteClients.length > 0) {
-        const insertClient = sqlite.prepare(`
-          INSERT OR REPLACE INTO clients (id, name, code, industry, contact_person, email, phone, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const c of remoteClients) {
-          insertClient.run(
-            c.id,
-            c.name,
-            c.code,
-            c.industry || 'E-Commerce',
-            c.contact_person || '',
-            c.email || '',
-            c.phone || '',
-            c.status || 'active',
-            c.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 10. Sync remote clients down to SQLite
+          if (Array.isArray(remoteClients) && remoteClients.length > 0) {
+            const insertClient = sqlite.prepare(`
+              INSERT OR REPLACE INTO clients (id, name, code, industry, contact_person, email, phone, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const c of remoteClients) {
+              insertClient.run(
+                c.id,
+                c.name,
+                c.code,
+                c.industry || 'E-Commerce',
+                c.contact_person || '',
+                c.email || '',
+                c.phone || '',
+                c.status || 'active',
+                c.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      // Sync remote projects down to SQLite
-      if (Array.isArray(remoteProjects) && remoteProjects.length > 0) {
-        const insertPrj = sqlite.prepare(`
-          INSERT OR REPLACE INTO projects (id, client_id, name, project_code, description, project_manager_id, team_id, start_date, end_date, priority, budget, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const p of remoteProjects) {
-          insertPrj.run(
-            p.id,
-            p.client_id,
-            p.name,
-            p.project_code,
-            p.description || '',
-            p.project_manager_id || null,
-            p.team_id || null,
-            p.start_date || null,
-            p.end_date || null,
-            p.priority || 'medium',
-            parseFloat(p.budget) || 0,
-            p.status || 'active',
-            p.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 11. Sync remote projects down to SQLite
+          if (Array.isArray(remoteProjects) && remoteProjects.length > 0) {
+            const insertPrj = sqlite.prepare(`
+              INSERT OR REPLACE INTO projects (id, client_id, name, project_code, description, project_manager_id, team_id, start_date, end_date, priority, budget, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const p of remoteProjects) {
+              insertPrj.run(
+                p.id,
+                p.client_id,
+                p.name,
+                p.project_code,
+                p.description || '',
+                p.project_manager_id || null,
+                p.team_id || null,
+                p.start_date || null,
+                p.end_date || null,
+                p.priority || 'medium',
+                parseFloat(p.budget) || 0,
+                p.status || 'active',
+                p.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      // Sync remote project assignments down to SQLite
-      if (Array.isArray(remoteAssignments) && remoteAssignments.length > 0) {
-        const insertAssign = sqlite.prepare(`
-          INSERT OR REPLACE INTO project_assignments (id, project_id, employee_id, role_on_project, allocation_percent, start_date, end_date, status, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const pa of remoteAssignments) {
-          insertAssign.run(
-            pa.id,
-            pa.project_id,
-            pa.employee_id,
-            pa.role_on_project || 'Research Analyst',
-            parseInt(pa.allocation_percent, 10) || 100,
-            pa.start_date || null,
-            pa.end_date || null,
-            pa.status || 'active',
-            pa.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 12. Sync remote project assignments down to SQLite
+          if (Array.isArray(remoteAssignments) && remoteAssignments.length > 0) {
+            const insertAssign = sqlite.prepare(`
+              INSERT OR REPLACE INTO project_assignments (id, project_id, employee_id, role_on_project, allocation_percent, start_date, end_date, status, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const pa of remoteAssignments) {
+              insertAssign.run(
+                pa.id,
+                pa.project_id,
+                pa.employee_id,
+                pa.role_on_project || 'Research Analyst',
+                parseInt(pa.allocation_percent, 10) || 100,
+                pa.start_date || null,
+                pa.end_date || null,
+                pa.status || 'active',
+                pa.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      // Sync remote timesheets down to SQLite
-      if (Array.isArray(remoteTimesheets) && remoteTimesheets.length > 0) {
-        const insertTs = sqlite.prepare(`
-          INSERT OR REPLACE INTO timesheets (id, employee_id, project_id, date, start_time, end_time, break_mins, total_hours, overtime_hours, task_description, status, reviewed_by, review_notes, reviewed_at, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const ts of remoteTimesheets) {
-          insertTs.run(
-            ts.id,
-            ts.employee_id,
-            ts.project_id || null,
-            ts.date,
-            ts.start_time || '09:00',
-            ts.end_time || '18:00',
-            parseInt(ts.break_mins, 10) || 60,
-            parseFloat(ts.total_hours) || 8.0,
-            parseFloat(ts.overtime_hours) || 0.0,
-            ts.task_description || '',
-            ts.status || 'submitted',
-            ts.reviewed_by || null,
-            ts.review_notes || null,
-            ts.reviewed_at || null,
-            ts.created_at || new Date().toISOString()
-          );
-        }
-      }
+          // 13. Sync remote timesheets down to SQLite
+          if (Array.isArray(remoteTimesheets) && remoteTimesheets.length > 0) {
+            const insertTs = sqlite.prepare(`
+              INSERT OR REPLACE INTO timesheets (id, employee_id, project_id, date, start_time, end_time, break_mins, total_hours, overtime_hours, task_description, status, reviewed_by, review_notes, reviewed_at, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const ts of remoteTimesheets) {
+              insertTs.run(
+                ts.id,
+                ts.employee_id,
+                ts.project_id || null,
+                ts.date,
+                ts.start_time || '09:00',
+                ts.end_time || '18:00',
+                parseInt(ts.break_mins, 10) || 60,
+                parseFloat(ts.total_hours) || 8.0,
+                parseFloat(ts.overtime_hours) || 0.0,
+                ts.task_description || '',
+                ts.status || 'submitted',
+                ts.reviewed_by || null,
+                ts.review_notes || null,
+                ts.reviewed_at || null,
+                ts.created_at || new Date().toISOString()
+              );
+            }
+          }
 
-      // Sync remote audit logs down to SQLite
-      if (Array.isArray(remoteAudits) && remoteAudits.length > 0) {
-        const insertAudit = sqlite.prepare(`
-          INSERT OR REPLACE INTO audit_logs (id, user_id, username, action, entity_type, entity_id, details, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-        for (const a of remoteAudits) {
-          insertAudit.run(
-            a.id,
-            a.user_id || null,
-            a.username || 'system',
-            a.action || 'ACTION',
-            a.entity_type || 'system',
-            String(a.entity_id || '0'),
-            a.details || a.action,
-            a.created_at || new Date().toISOString()
-          );
-        }
+          // 14. Sync remote audit logs down to SQLite
+          if (Array.isArray(remoteAudits) && remoteAudits.length > 0) {
+            const insertAudit = sqlite.prepare(`
+              INSERT OR REPLACE INTO audit_logs (id, user_id, username, action, entity_type, entity_id, details, created_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `);
+            for (const a of remoteAudits) {
+              insertAudit.run(
+                a.id,
+                a.user_id || null,
+                a.username || 'system',
+                a.action || 'ACTION',
+                a.entity_type || 'system',
+                String(a.entity_id || '0'),
+                a.details || a.action,
+                a.created_at || new Date().toISOString()
+              );
+            }
+          }
+        })();
+      } finally {
+        sqlite.pragma('foreign_keys = ON');
       }
-    })();
-  } catch (err) {
-    console.warn('Sync from Supabase warning:', err.message);
-  } finally {
-    activeSyncPromise = null;
-  }
+    } catch (err) {
+      console.warn('Sync from Supabase warning:', err.message);
+    } finally {
+      activeSyncPromise = null;
+    }
   })();
 
   return activeSyncPromise;

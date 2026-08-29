@@ -44,47 +44,97 @@ router.post('/login', async (req, res) => {
 
     // 2. If user is not found in SQLite (e.g. fresh Vercel serverless cold start), fetch directly from Supabase
     if (!user && supabase) {
-      const { data: sbUser } = await supabase.from('users').select('*').ilike('username', trimmedUsername).single();
-      if (sbUser) {
-        db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, employee_id, avatar_url) VALUES (?, ?, ?, ?, ?, ?)')
-          .run(sbUser.id, sbUser.username, sbUser.password_hash, sbUser.role || 'employee', sbUser.employee_id || null, sbUser.avatar_url || null);
-
-        if (sbUser.employee_id) {
-          const { data: sbEmp } = await supabase.from('employees').select('*').eq('id', sbUser.employee_id).single();
-          if (sbEmp) {
-            db.prepare(`
-              INSERT OR REPLACE INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number, avatar_url)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).run(
-              sbEmp.id,
-              sbEmp.employee_code || `EMP-${String(sbEmp.id).padStart(3, '0')}`,
-              sbEmp.first_name,
-              sbEmp.last_name,
-              sbEmp.job_title,
-              sbEmp.department,
-              sbEmp.employment_status || 'active',
-              sbEmp.employment_type || 'full_time',
-              sbEmp.hire_date || '2026-01-01',
-              parseFloat(sbEmp.hourly_rate) || 0,
-              parseFloat(sbEmp.monthly_salary) || 0,
-              sbEmp.phone || null,
-              sbEmp.address || null,
-              sbEmp.emergency_contact_name || null,
-              sbEmp.emergency_contact_phone || null,
-              sbEmp.bank_name || null,
-              sbEmp.bank_account_number || null,
-              sbEmp.avatar_url || null
-            );
+      try {
+        const { data: sbUser } = await supabase.from('users').select('*').ilike('username', trimmedUsername).maybeSingle();
+        if (sbUser) {
+          let sbEmp = null;
+          if (sbUser.employee_id) {
+            const { data: empData } = await supabase.from('employees').select('*').eq('id', sbUser.employee_id).maybeSingle();
+            sbEmp = empData;
+            if (sbEmp) {
+              try {
+                db.prepare(`
+                  INSERT INTO employees (
+                    id, employee_code, first_name, last_name, job_title, department,
+                    employment_status, employment_type, hire_date, hourly_rate, monthly_salary,
+                    phone, address, emergency_contact_name, emergency_contact_phone, bank_name,
+                    bank_account_number, avatar_url, team_id, designation_id, manager_id
+                  )
+                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  ON CONFLICT(id) DO UPDATE SET
+                    employee_code = EXCLUDED.employee_code,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    job_title = EXCLUDED.job_title,
+                    department = EXCLUDED.department,
+                    employment_status = EXCLUDED.employment_status,
+                    employment_type = EXCLUDED.employment_type,
+                    hire_date = EXCLUDED.hire_date,
+                    hourly_rate = EXCLUDED.hourly_rate,
+                    monthly_salary = EXCLUDED.monthly_salary,
+                    phone = EXCLUDED.phone,
+                    address = EXCLUDED.address,
+                    emergency_contact_name = EXCLUDED.emergency_contact_name,
+                    emergency_contact_phone = EXCLUDED.emergency_contact_phone,
+                    bank_name = EXCLUDED.bank_name,
+                    bank_account_number = EXCLUDED.bank_account_number,
+                    avatar_url = EXCLUDED.avatar_url,
+                    team_id = COALESCE(EXCLUDED.team_id, employees.team_id),
+                    designation_id = COALESCE(EXCLUDED.designation_id, employees.designation_id),
+                    manager_id = COALESCE(EXCLUDED.manager_id, employees.manager_id)
+                `).run(
+                  sbEmp.id,
+                  sbEmp.employee_code || `EMP-${String(sbEmp.id).padStart(3, '0')}`,
+                  sbEmp.first_name,
+                  sbEmp.last_name,
+                  sbEmp.job_title,
+                  sbEmp.department,
+                  sbEmp.employment_status || 'active',
+                  sbEmp.employment_type || 'full_time',
+                  sbEmp.hire_date || '2026-01-01',
+                  parseFloat(sbEmp.hourly_rate) || 0,
+                  parseFloat(sbEmp.monthly_salary) || 0,
+                  sbEmp.phone || null,
+                  sbEmp.address || null,
+                  sbEmp.emergency_contact_name || null,
+                  sbEmp.emergency_contact_phone || null,
+                  sbEmp.bank_name || null,
+                  sbEmp.bank_account_number || null,
+                  sbEmp.avatar_url || null,
+                  sbEmp.team_id || null,
+                  sbEmp.designation_id || null,
+                  sbEmp.manager_id || null
+                );
+              } catch (e) {
+                console.warn('Cold start employee insertion notice:', e.message);
+              }
+            }
           }
-        }
 
-        user = db.prepare(`
-          SELECT u.id, u.username, u.password_hash, u.role, u.employee_id, COALESCE(u.avatar_url, e.avatar_url) as avatar_url,
-                 e.first_name, e.last_name, e.job_title, e.department, e.employee_code, e.employment_status
-          FROM users u
-          LEFT JOIN employees e ON u.employee_id = e.id
-          WHERE LOWER(u.username) = LOWER(?)
-        `).get(trimmedUsername);
+          try {
+            db.prepare('INSERT OR REPLACE INTO users (id, username, password_hash, role, employee_id, avatar_url) VALUES (?, ?, ?, ?, ?, ?)')
+              .run(sbUser.id, sbUser.username, sbUser.password_hash, sbUser.role || 'employee', sbUser.employee_id || null, sbUser.avatar_url || null);
+          } catch (e) {
+            console.warn('Cold start user insertion notice:', e.message);
+          }
+
+          user = {
+            id: sbUser.id,
+            username: sbUser.username,
+            password_hash: sbUser.password_hash,
+            role: sbUser.role || 'employee',
+            employee_id: sbUser.employee_id || null,
+            avatar_url: sbUser.avatar_url || sbEmp?.avatar_url || null,
+            first_name: sbEmp?.first_name || null,
+            last_name: sbEmp?.last_name || null,
+            job_title: sbEmp?.job_title || null,
+            department: sbEmp?.department || null,
+            employee_code: sbEmp?.employee_code || null,
+            employment_status: sbEmp?.employment_status || 'active'
+          };
+        }
+      } catch (sbErr) {
+        console.warn('Supabase auth fallback check notice:', sbErr.message);
       }
     }
 
