@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { Building2, Users, Plus, Edit2, Trash2, CheckCircle2, Search, ArrowRight, UserCheck } from 'lucide-react';
+import { Building2, Users, Plus, Edit2, Trash2, CheckCircle2, Search, ArrowRight, UserCheck, UserPlus, UserMinus, X, ShieldCheck } from 'lucide-react';
 
 export default function Teams() {
   const { isManager, showToast } = useAuth();
@@ -9,9 +9,19 @@ export default function Teams() {
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
+
+  // Modals
   const [showModal, setShowModal] = useState(false);
   const [selectedTeam, setSelectedTeam] = useState(null);
   const [formData, setFormData] = useState({ name: '', description: '', department: 'Research & Analytics', team_lead_id: '' });
+
+  // Team Members Modal
+  const [showMembersModal, setShowMembersModal] = useState(false);
+  const [activeTeamMembers, setActiveTeamMembers] = useState(null);
+  const [membersList, setMembersList] = useState([]);
+  const [selectedEmpToAssign, setSelectedEmpToAssign] = useState('');
+  const [loadingMembers, setLoadingMembers] = useState(false);
+  const [isAssigning, setIsAssigning] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -78,6 +88,55 @@ export default function Teams() {
     }
   };
 
+  // Open Manage Members Modal
+  const handleOpenMembersModal = async (team) => {
+    setActiveTeamMembers(team);
+    setSelectedEmpToAssign('');
+    setShowMembersModal(true);
+    setLoadingMembers(true);
+    try {
+      const res = await api.teams.getById(team.id);
+      setMembersList(res.members || []);
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setLoadingMembers(false);
+    }
+  };
+
+  const handleAssignMember = async (e) => {
+    e.preventDefault();
+    if (!selectedEmpToAssign || !activeTeamMembers) return;
+    setIsAssigning(true);
+    try {
+      await api.teams.assignMember(activeTeamMembers.id, { employee_id: parseInt(selectedEmpToAssign, 10) });
+      showToast('Member assigned to team successfully!', 'success');
+      setSelectedEmpToAssign('');
+      // Reload roster
+      const res = await api.teams.getById(activeTeamMembers.id);
+      setMembersList(res.members || []);
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
+  const handleRemoveMember = async (empId, empName) => {
+    if (!window.confirm(`Remove ${empName} from this team?`)) return;
+    try {
+      await api.teams.removeMember(activeTeamMembers.id, empId);
+      showToast(`${empName} removed from team.`, 'info');
+      // Reload roster
+      const res = await api.teams.getById(activeTeamMembers.id);
+      setMembersList(res.members || []);
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
   const filteredTeams = teams.filter(t =>
     t.name.toLowerCase().includes(search.toLowerCase()) ||
     t.department.toLowerCase().includes(search.toLowerCase())
@@ -92,7 +151,7 @@ export default function Teams() {
             <Building2 size={26} color="var(--brand-green)" /> Teams &amp; Departments
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
-            Manage EcomEdge functional groups, research squads, and team lead structures.
+            Manage EcomEdge functional groups, research squads, team assignments, and leadership structures.
           </p>
         </div>
         {isManager && (
@@ -125,52 +184,64 @@ export default function Teams() {
           No teams found matching your search.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
           {filteredTeams.map((team) => (
-            <div key={team.id} className="glass-card team-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-                <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>
-                  {team.department}
-                </span>
-                {isManager && (
-                  <div style={{ display: 'flex', gap: '0.35rem' }}>
-                    <button className="btn-icon" onClick={() => handleOpenEdit(team)} title="Edit Team" style={{ width: '30px', height: '30px' }}>
-                      <Edit2 size={14} />
-                    </button>
-                    <button className="btn-icon" onClick={() => handleDelete(team.id)} title="Delete Team" style={{ width: '30px', height: '30px', color: 'var(--danger)' }}>
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                )}
+            <div key={team.id} className="glass-card team-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
+                  <span className="badge badge-success" style={{ fontSize: '0.75rem' }}>
+                    {team.department}
+                  </span>
+                  {isManager && (
+                    <div style={{ display: 'flex', gap: '0.35rem' }}>
+                      <button className="btn-icon" onClick={() => handleOpenEdit(team)} title="Edit Team" style={{ width: '30px', height: '30px' }}>
+                        <Edit2 size={14} />
+                      </button>
+                      <button className="btn-icon" onClick={() => handleDelete(team.id)} title="Delete Team" style={{ width: '30px', height: '30px', color: 'var(--danger)' }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
+                  {team.name}
+                </h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', minHeight: '38px', lineHeight: '1.4' }}>
+                  {team.description || 'Specialized workforce team supporting research and e-commerce client operations.'}
+                </p>
               </div>
 
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.4rem' }}>
-                {team.name}
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', minHeight: '38px', lineHeight: '1.4' }}>
-                {team.description || 'Specialized workforce team supporting research and e-commerce client operations.'}
-              </p>
+              <div>
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', marginBottom: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div className="user-avatar" style={{ width: '26px', height: '26px', fontSize: '0.65rem' }}>
+                      {team.lead_avatar_url ? (
+                        <img src={team.lead_avatar_url} alt="Lead" />
+                      ) : (
+                        team.lead_first_name ? team.lead_first_name[0] : 'U'
+                      )}
+                    </div>
+                    <div style={{ fontSize: '0.78rem' }}>
+                      <span style={{ color: 'var(--text-muted)' }}>Lead: </span>
+                      <strong style={{ color: 'var(--text-primary)' }}>
+                        {team.lead_first_name ? `${team.lead_first_name} ${team.lead_last_name}` : 'Unassigned'}
+                      </strong>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-green)' }}>
+                    <Users size={15} />
+                    <span>{team.member_count || 0} Members</span>
+                  </div>
+                </div>
 
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <div className="user-avatar" style={{ width: '26px', height: '26px', fontSize: '0.65rem' }}>
-                    {team.lead_avatar_url ? (
-                      <img src={team.lead_avatar_url} alt="Lead" />
-                    ) : (
-                      team.lead_first_name ? team.lead_first_name[0] : 'U'
-                    )}
-                  </div>
-                  <div style={{ fontSize: '0.78rem' }}>
-                    <span style={{ color: 'var(--text-muted)' }}>Lead: </span>
-                    <strong style={{ color: 'var(--text-primary)' }}>
-                      {team.lead_first_name ? `${team.lead_first_name} ${team.lead_last_name}` : 'Unassigned'}
-                    </strong>
-                  </div>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.82rem', fontWeight: 700, color: 'var(--brand-green)' }}>
-                  <Users size={15} />
-                  <span>{team.member_count || 0} Staff</span>
-                </div>
+                <button
+                  className="btn btn-secondary btn-sm"
+                  style={{ width: '100%', justifyContent: 'center', fontWeight: 700 }}
+                  onClick={() => handleOpenMembersModal(team)}
+                >
+                  <Users size={14} /> Manage Team Members &amp; Roster
+                </button>
               </div>
             </div>
           ))}
@@ -179,12 +250,15 @@ export default function Teams() {
 
       {/* Add / Edit Team Modal */}
       {showModal && (
-        <div className="modal-backdrop" onClick={() => setShowModal(false)}>
-          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-            <div className="modal-header">
+        <div className="modal-backdrop">
+          <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px' }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontWeight: 800, fontSize: '1.15rem' }}>
                 {selectedTeam ? 'Edit Team' : 'Create New Team'}
               </h3>
+              <button type="button" className="btn-icon" onClick={() => setShowModal(false)} title="Close">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleSubmit}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -193,7 +267,7 @@ export default function Teams() {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="e.g. E-Commerce Research"
+                    placeholder="e.g. E-Commerce Research Squad A"
                     value={formData.name}
                     onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                     required
@@ -257,6 +331,142 @@ export default function Teams() {
           </div>
         </div>
       )}
+
+      {/* Manage Team Members & Roster Modal */}
+      {showMembersModal && activeTeamMembers && (
+        <div className="modal-backdrop" style={{ zIndex: 1100 }}>
+          <div className="modal-card modal-lg" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '780px', width: '95vw', zIndex: 1101 }}>
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                <Building2 size={22} color="var(--brand-green)" />
+                <div>
+                  <h3 style={{ margin: 0, fontWeight: 800 }}>Team Roster: {activeTeamMembers.name}</h3>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    {activeTeamMembers.department} • {membersList.length} Active Members
+                  </span>
+                </div>
+              </div>
+              <button type="button" className="btn-icon" onClick={() => setShowMembersModal(false)} title="Close">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', maxHeight: '72vh', overflowY: 'auto' }}>
+              {/* Quick Member Assignment Box (Managers) */}
+              {isManager && (
+                <div style={{ background: 'var(--bg-tertiary)', padding: '1rem 1.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                  <h4 style={{ margin: '0 0 0.5rem 0', fontSize: '0.88rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.4rem', color: 'var(--text-primary)' }}>
+                    <UserPlus size={16} color="var(--brand-green)" /> Assign Staff Member to Team
+                  </h4>
+                  <form onSubmit={handleAssignMember} style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <select
+                      className="form-control"
+                      style={{ flex: 1, minWidth: '220px' }}
+                      value={selectedEmpToAssign}
+                      onChange={(e) => setSelectedEmpToAssign(e.target.value)}
+                      required
+                    >
+                      <option value="">-- Select Employee to Assign --</option>
+                      {employees
+                        .filter(emp => emp.employment_status === 'active' && !membersList.some(m => m.id === emp.id))
+                        .map(emp => {
+                          const currentTeam = teams.find(t => t.id === emp.team_id);
+                          return (
+                            <option key={emp.id} value={emp.id}>
+                              {emp.first_name} {emp.last_name} — {emp.job_title} ({currentTeam ? `Currently: ${currentTeam.name}` : 'Unassigned'})
+                            </option>
+                          );
+                        })}
+                    </select>
+                    <button type="submit" className="btn btn-primary btn-sm" disabled={!selectedEmpToAssign || isAssigning}>
+                      <Plus size={14} /> {isAssigning ? 'Assigning...' : 'Add to Team'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Roster List Table */}
+              <div>
+                <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.04em', margin: '0 0 0.75rem 0' }}>
+                  Current Team Members ({membersList.length})
+                </h4>
+
+                {loadingMembers ? (
+                  <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading roster...</div>
+                ) : membersList.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '2.5rem 1rem', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', color: 'var(--text-muted)' }}>
+                    <Users size={32} style={{ opacity: 0.4, marginBottom: '0.5rem' }} />
+                    <p style={{ margin: 0, fontSize: '0.88rem' }}>No staff members currently assigned to this team.</p>
+                    {isManager && <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.78rem' }}>Use the form above to assign employees into this squad.</p>}
+                  </div>
+                ) : (
+                  <div className="table-container" style={{ border: 'none' }}>
+                    <table className="table">
+                      <thead>
+                        <tr>
+                          <th>Employee</th>
+                          <th>Role / Job Title</th>
+                          <th>Department</th>
+                          <th>Status</th>
+                          {isManager && <th style={{ textAlign: 'right' }}>Actions</th>}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {membersList.map((member) => (
+                          <tr key={member.id}>
+                            <td>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                                <div className="user-avatar" style={{ width: '32px', height: '32px', fontSize: '0.78rem' }}>
+                                  {member.avatar_url ? (
+                                    <img src={member.avatar_url} alt={member.first_name} />
+                                  ) : (
+                                    member.first_name[0]
+                                  )}
+                                </div>
+                                <div>
+                                  <div style={{ fontWeight: 700 }}>{member.first_name} {member.last_name}</div>
+                                  <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{member.employee_code}</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td>{member.job_title}</td>
+                            <td>{member.department}</td>
+                            <td>
+                              <span className={`badge badge-${member.employment_status === 'active' ? 'success' : 'warning'}`} style={{ textTransform: 'capitalize' }}>
+                                {member.employment_status}
+                              </span>
+                            </td>
+                            {isManager && (
+                              <td style={{ textAlign: 'right' }}>
+                                <button
+                                  className="btn btn-secondary btn-sm"
+                                  style={{ color: 'var(--danger)', borderColor: 'rgba(239, 68, 68, 0.3)' }}
+                                  onClick={() => handleRemoveMember(member.id, `${member.first_name} ${member.last_name}`)}
+                                  title="Remove from team"
+                                >
+                                  <UserMinus size={13} />
+                                  <span>Remove</span>
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowMembersModal(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+

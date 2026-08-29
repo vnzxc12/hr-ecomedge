@@ -569,7 +569,13 @@ async function syncFromSupabase(force = false) {
         { data: timeLogs },
         { data: remoteAudits },
         { data: remotePayrolls },
-        { data: remotePayslips }
+        { data: remotePayslips },
+        { data: remoteTeams },
+        { data: remoteDesignations },
+        { data: remoteClients },
+        { data: remoteProjects },
+        { data: remoteAssignments },
+        { data: remoteTimesheets }
       ] = await Promise.all([
         supabase.from('employees').select('*'),
         supabase.from('users').select('*'),
@@ -578,7 +584,13 @@ async function syncFromSupabase(force = false) {
         supabase.from('time_logs').select('*'),
         supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200),
         supabase.from('payrolls').select('*').order('id', { ascending: true }),
-        supabase.from('payslips').select('*').order('id', { ascending: true })
+        supabase.from('payslips').select('*').order('id', { ascending: true }),
+        supabase.from('teams').select('*').order('id', { ascending: true }),
+        supabase.from('designations').select('*').order('id', { ascending: true }),
+        supabase.from('clients').select('*').order('id', { ascending: true }),
+        supabase.from('projects').select('*').order('id', { ascending: true }),
+        supabase.from('project_assignments').select('*').order('id', { ascending: true }),
+        supabase.from('timesheets').select('*').order('id', { ascending: true })
       ]);
 
       if (empErr || userErr) {
@@ -701,6 +713,138 @@ async function syncFromSupabase(force = false) {
             parseFloat(s.overtime_hours) || 0,
             s.payment_status || 'unpaid',
             s.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote teams down to SQLite
+      if (Array.isArray(remoteTeams) && remoteTeams.length > 0) {
+        const insertTeam = sqlite.prepare(`
+          INSERT OR REPLACE INTO teams (id, name, description, department, team_lead_id, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const t of remoteTeams) {
+          insertTeam.run(
+            t.id,
+            t.name,
+            t.description || '',
+            t.department,
+            t.team_lead_id || null,
+            t.status || 'active',
+            t.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote designations down to SQLite
+      if (Array.isArray(remoteDesignations) && remoteDesignations.length > 0) {
+        const insertDesig = sqlite.prepare(`
+          INSERT OR REPLACE INTO designations (id, title, department, level, description, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const d of remoteDesignations) {
+          insertDesig.run(
+            d.id,
+            d.title,
+            d.department,
+            d.level || 'Mid-Level',
+            d.description || '',
+            d.status || 'active',
+            d.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote clients down to SQLite
+      if (Array.isArray(remoteClients) && remoteClients.length > 0) {
+        const insertClient = sqlite.prepare(`
+          INSERT OR REPLACE INTO clients (id, name, code, industry, contact_person, email, phone, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const c of remoteClients) {
+          insertClient.run(
+            c.id,
+            c.name,
+            c.code,
+            c.industry || 'E-Commerce',
+            c.contact_person || '',
+            c.email || '',
+            c.phone || '',
+            c.status || 'active',
+            c.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote projects down to SQLite
+      if (Array.isArray(remoteProjects) && remoteProjects.length > 0) {
+        const insertPrj = sqlite.prepare(`
+          INSERT OR REPLACE INTO projects (id, client_id, name, project_code, description, project_manager_id, team_id, start_date, end_date, priority, budget, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const p of remoteProjects) {
+          insertPrj.run(
+            p.id,
+            p.client_id,
+            p.name,
+            p.project_code,
+            p.description || '',
+            p.project_manager_id || null,
+            p.team_id || null,
+            p.start_date || null,
+            p.end_date || null,
+            p.priority || 'medium',
+            parseFloat(p.budget) || 0,
+            p.status || 'active',
+            p.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote project assignments down to SQLite
+      if (Array.isArray(remoteAssignments) && remoteAssignments.length > 0) {
+        const insertAssign = sqlite.prepare(`
+          INSERT OR REPLACE INTO project_assignments (id, project_id, employee_id, role_on_project, allocation_percent, start_date, end_date, status, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const pa of remoteAssignments) {
+          insertAssign.run(
+            pa.id,
+            pa.project_id,
+            pa.employee_id,
+            pa.role_on_project || 'Research Analyst',
+            parseInt(pa.allocation_percent, 10) || 100,
+            pa.start_date || null,
+            pa.end_date || null,
+            pa.status || 'active',
+            pa.created_at || new Date().toISOString()
+          );
+        }
+      }
+
+      // Sync remote timesheets down to SQLite
+      if (Array.isArray(remoteTimesheets) && remoteTimesheets.length > 0) {
+        const insertTs = sqlite.prepare(`
+          INSERT OR REPLACE INTO timesheets (id, employee_id, project_id, date, start_time, end_time, break_mins, total_hours, overtime_hours, task_description, status, reviewed_by, review_notes, reviewed_at, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const ts of remoteTimesheets) {
+          insertTs.run(
+            ts.id,
+            ts.employee_id,
+            ts.project_id || null,
+            ts.date,
+            ts.start_time || '09:00',
+            ts.end_time || '18:00',
+            parseInt(ts.break_mins, 10) || 60,
+            parseFloat(ts.total_hours) || 8.0,
+            parseFloat(ts.overtime_hours) || 0.0,
+            ts.task_description || '',
+            ts.status || 'submitted',
+            ts.reviewed_by || null,
+            ts.review_notes || null,
+            ts.reviewed_at || null,
+            ts.created_at || new Date().toISOString()
           );
         }
       }

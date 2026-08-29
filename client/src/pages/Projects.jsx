@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { FolderKanban, Plus, Users, Briefcase, Calendar, CheckCircle2, Search, BarChart2, ArrowUpRight, Clock, ShieldAlert } from 'lucide-react';
+import { FolderKanban, Plus, Users, Briefcase, Calendar, CheckCircle2, Search, BarChart2, ArrowUpRight, Clock, ShieldAlert, X, Edit2, Trash2 } from 'lucide-react';
 
 export default function Projects() {
   const { isManager, showToast } = useAuth();
@@ -83,6 +83,18 @@ export default function Projects() {
       await api.projects.create(projectForm);
       showToast('Project created successfully!', 'success');
       setShowProjectModal(false);
+      setProjectForm({
+        client_id: '',
+        name: '',
+        project_code: '',
+        description: '',
+        project_manager_id: '',
+        team_id: '',
+        start_date: '',
+        end_date: '',
+        priority: 'high',
+        budget: ''
+      });
       loadData();
     } catch (err) {
       showToast(err.message, 'danger');
@@ -95,6 +107,14 @@ export default function Projects() {
       await api.projects.assign(assignForm);
       showToast('Employee assigned to project successfully!', 'success');
       setShowAssignModal(false);
+      setAssignForm({
+        project_id: '',
+        employee_id: '',
+        role_on_project: 'Research Analyst',
+        allocation_percent: 100,
+        start_date: '',
+        end_date: ''
+      });
       loadData();
     } catch (err) {
       showToast(err.message, 'danger');
@@ -107,6 +127,25 @@ export default function Projects() {
       await api.projects.createClient(clientForm);
       showToast('Client added successfully!', 'success');
       setShowClientModal(false);
+      setClientForm({
+        name: '',
+        code: '',
+        industry: 'E-Commerce Research & Analytics',
+        contact_person: '',
+        email: '',
+        phone: ''
+      });
+      loadData();
+    } catch (err) {
+      showToast(err.message, 'danger');
+    }
+  };
+
+  const handleDeleteClient = async (id, clientName) => {
+    if (!window.confirm(`Delete client "${clientName}"? Any associated projects will also be deleted.`)) return;
+    try {
+      await api.projects.deleteClient(id);
+      showToast('Client deleted successfully.', 'info');
       loadData();
     } catch (err) {
       showToast(err.message, 'danger');
@@ -221,22 +260,25 @@ export default function Projects() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
               {workloadData.teams.map(t => (
                 <div key={t.id} style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
-                  <div style={{ fontWeight: 800, fontSize: '0.92rem', color: 'var(--text-primary)' }}>{t.name}</div>
-                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>{t.department}</div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem', marginBottom: '0.35rem' }}>
-                    <span>Average Allocation:</span>
-                    <strong style={{ color: t.avg_allocation > 90 ? 'var(--danger)' : 'var(--brand-green)' }}>
-                      {Math.round(t.avg_allocation)}%
-                    </strong>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
+                    <strong style={{ fontSize: '1rem' }}>{t.name}</strong>
+                    <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>{t.department}</span>
                   </div>
-                  <div className="progress-bar-bg">
-                    <div
-                      className="progress-bar-fill"
-                      style={{
-                        width: `${Math.min(t.avg_allocation, 100)}%`,
-                        background: t.avg_allocation > 90 ? 'var(--danger)' : 'var(--brand-green)'
-                      }}
-                    />
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.75rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Active Squad Staff:</span>
+                      <strong>{t.total_employees} Staff</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Active Projects:</span>
+                      <strong>{t.active_projects} Projects</strong>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <span>Average Utilization:</span>
+                      <strong style={{ color: t.avg_allocation > 100 ? 'var(--danger)' : 'var(--brand-green)' }}>
+                        {Math.round(t.avg_allocation)}%
+                      </strong>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -245,8 +287,10 @@ export default function Projects() {
 
           {/* Individual Workload Table */}
           <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-            <div style={{ padding: '1.15rem 1.5rem', borderBottom: '1px solid var(--border-color)' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 800 }}>Employee Utilization &amp; Active Projects</h3>
+            <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Users size={18} color="var(--brand-green)" /> Staff Member Allocation &amp; Capacity
+              </h3>
             </div>
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
               <table className="table">
@@ -311,21 +355,35 @@ export default function Projects() {
         </div>
       ) : (
         /* CLIENTS VIEW */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
           {clients.map(client => (
-            <div key={client.id} className="glass-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
-                <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{client.code}</span>
-                <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{client.project_count || 0} Projects</span>
+            <div key={client.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{client.code}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{client.project_count || 0} Projects</span>
+                    {isManager && (
+                      <button
+                        className="btn-icon"
+                        onClick={() => handleDeleteClient(client.id, client.name)}
+                        title="Delete Client"
+                        style={{ width: '28px', height: '28px', color: 'var(--danger)' }}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.35rem' }}>{client.name}</h3>
+                <div style={{ fontSize: '0.78rem', color: 'var(--brand-green)', fontWeight: 700, marginBottom: '0.75rem' }}>
+                  {client.industry}
+                </div>
               </div>
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.35rem' }}>{client.name}</h3>
-              <div style={{ fontSize: '0.78rem', color: 'var(--brand-green)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                {client.industry}
-              </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                <div>Contact: <strong>{client.contact_person || 'N/A'}</strong></div>
-                <div>Email: <strong>{client.email || 'N/A'}</strong></div>
-                <div>Phone: <strong>{client.phone || 'N/A'}</strong></div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                <div>Contact: <strong style={{ color: 'var(--text-primary)' }}>{client.contact_person || 'N/A'}</strong></div>
+                <div>Email: <strong style={{ color: 'var(--text-primary)' }}>{client.email || 'N/A'}</strong></div>
+                <div>Phone: <strong style={{ color: 'var(--text-primary)' }}>{client.phone || 'N/A'}</strong></div>
               </div>
             </div>
           ))}
@@ -334,10 +392,13 @@ export default function Projects() {
 
       {/* Add Project Modal */}
       {showProjectModal && (
-        <div className="modal-backdrop" onClick={() => setShowProjectModal(false)}>
+        <div className="modal-backdrop">
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '560px' }}>
-            <div className="modal-header">
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontWeight: 800 }}>Create New Client Research Project</h3>
+              <button type="button" className="btn-icon" onClick={() => setShowProjectModal(false)} title="Close">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleCreateProject}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -450,10 +511,13 @@ export default function Projects() {
 
       {/* Assign Employee Modal */}
       {showAssignModal && (
-        <div className="modal-backdrop" onClick={() => setShowAssignModal(false)}>
+        <div className="modal-backdrop">
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontWeight: 800 }}>Assign Employee to Project</h3>
+              <button type="button" className="btn-icon" onClick={() => setShowAssignModal(false)} title="Close">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleAssignMember}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
@@ -512,10 +576,13 @@ export default function Projects() {
 
       {/* Add Client Modal */}
       {showClientModal && (
-        <div className="modal-backdrop" onClick={() => setShowClientModal(false)}>
+        <div className="modal-backdrop">
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
+            <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontWeight: 800 }}>Add Client Account</h3>
+              <button type="button" className="btn-icon" onClick={() => setShowClientModal(false)} title="Close">
+                <X size={18} />
+              </button>
             </div>
             <form onSubmit={handleCreateClient}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>

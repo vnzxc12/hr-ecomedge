@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, supabase, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
 
 // GET /api/teams (List all teams with member count and lead name)
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const teams = db.prepare(`
       SELECT t.*, 
              e.first_name as lead_first_name, e.last_name as lead_last_name, e.avatar_url as lead_avatar_url,
@@ -23,8 +27,12 @@ router.get('/', authenticate, (req, res) => {
 });
 
 // GET /api/teams/:id (Get team details with member roster)
-router.get('/:id', authenticate, (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const team = db.prepare(`
       SELECT t.*, 
              e.first_name as lead_first_name, e.last_name as lead_last_name
@@ -52,7 +60,7 @@ router.get('/:id', authenticate, (req, res) => {
 });
 
 // POST /api/teams (Create team - Manager only)
-router.post('/', authenticate, requireManager, (req, res) => {
+router.post('/', authenticate, requireManager, async (req, res) => {
   try {
     const { name, description, department, team_lead_id } = req.body;
     if (!name || !department) {
@@ -64,9 +72,26 @@ router.post('/', authenticate, requireManager, (req, res) => {
       VALUES (?, ?, ?, ?, 'active')
     `).run(name.trim(), description || '', department.trim(), team_lead_id || null);
 
+    const newTeamId = result.lastInsertRowid;
+
+    if (supabase) {
+      try {
+        await supabase.from('teams').upsert({
+          id: newTeamId,
+          name: name.trim(),
+          description: description || '',
+          department: department.trim(),
+          team_lead_id: team_lead_id || null,
+          status: 'active'
+        });
+      } catch (sbErr) {
+        console.warn('Supabase team insert error:', sbErr.message);
+      }
+    }
+
     res.status(201).json({
       message: 'Team created successfully!',
-      team_id: result.lastInsertRowid
+      team_id: newTeamId
     });
   } catch (err) {
     console.error('Error creating team:', err);
@@ -75,8 +100,9 @@ router.post('/', authenticate, requireManager, (req, res) => {
 });
 
 // PUT /api/teams/:id (Update team - Manager only)
-router.put('/:id', authenticate, requireManager, (req, res) => {
+router.put('/:id', authenticate, requireManager, async (req, res) => {
   try {
+    const teamId = parseInt(req.params.id, 10);
     const { name, description, department, team_lead_id, status } = req.body;
     db.prepare(`
       UPDATE teams
@@ -86,7 +112,23 @@ router.put('/:id', authenticate, requireManager, (req, res) => {
           team_lead_id = ?,
           status = COALESCE(?, status)
       WHERE id = ?
-    `).run(name, description, department, team_lead_id || null, status, req.params.id);
+    `).run(name, description, department, team_lead_id || null, status, teamId);
+
+    const updated = db.prepare('SELECT * FROM teams WHERE id = ?').get(teamId);
+
+    if (supabase && updated) {
+      try {
+        await supabase.from('teams').update({
+          name: updated.name,
+          description: updated.description,
+          department: updated.department,
+          team_lead_id: updated.team_lead_id || null,
+          status: updated.status
+        }).eq('id', teamId);
+      } catch (sbErr) {
+        console.warn('Supabase team update error:', sbErr.message);
+      }
+    }
 
     res.json({ message: 'Team updated successfully!' });
   } catch (err) {
@@ -96,10 +138,21 @@ router.put('/:id', authenticate, requireManager, (req, res) => {
 });
 
 // DELETE /api/teams/:id
-router.delete('/:id', authenticate, requireManager, (req, res) => {
+router.delete('/:id', authenticate, requireManager, async (req, res) => {
   try {
-    db.prepare('UPDATE employees SET team_id = NULL WHERE team_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM teams WHERE id = ?').run(req.params.id);
+    const teamId = parseInt(req.params.id, 10);
+    db.prepare('UPDATE employees SET team_id = NULL WHERE team_id = ?').run(teamId);
+    db.prepare('DELETE FROM teams WHERE id = ?').run(teamId);
+
+    if (supabase) {
+      try {
+        await supabase.from('employees').update({ team_id: null }).eq('team_id', teamId);
+        await supabase.from('teams').delete().eq('id', teamId);
+      } catch (sbErr) {
+        console.warn('Supabase team delete error:', sbErr.message);
+      }
+    }
+
     res.json({ message: 'Team deleted successfully.' });
   } catch (err) {
     console.error('Error deleting team:', err);
@@ -107,11 +160,75 @@ router.delete('/:id', authenticate, requireManager, (req, res) => {
   }
 });
 
+// POST /api/teams/:id/assign-member (Assign employee to team)
+router.post('/:id/assign-member', authenticate, requireManager, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id, 10);
+    const { employee_id, employee_ids } = req.body;
+    const idsToAssign = Array.isArray(employee_ids) ? employee_ids : (employee_id ? [employee_id] : []);
+
+    if (idsToAssign.length === 0) {
+      return res.status(400).json({ error: 'Please specify employee(s) to assign.' });
+    }
+
+    const assignStmt = db.prepare('UPDATE employees SET team_id = ? WHERE id = ?');
+    for (const empId of idsToAssign) {
+      assignStmt.run(teamId, empId);
+    }
+
+    if (supabase) {
+      try {
+        for (const empId of idsToAssign) {
+          await supabase.from('employees').update({ team_id: teamId }).eq('id', empId);
+        }
+      } catch (sbErr) {
+        console.warn('Supabase team assign member error:', sbErr.message);
+      }
+    }
+
+    res.json({ message: `Assigned ${idsToAssign.length} staff member(s) to the team successfully!` });
+  } catch (err) {
+    console.error('Error assigning member to team:', err);
+    res.status(500).json({ error: err.message || 'Failed to assign member to team.' });
+  }
+});
+
+// POST /api/teams/:id/remove-member (Remove employee from team)
+router.post('/:id/remove-member', authenticate, requireManager, async (req, res) => {
+  try {
+    const teamId = parseInt(req.params.id, 10);
+    const { employee_id } = req.body;
+
+    if (!employee_id) {
+      return res.status(400).json({ error: 'Employee ID is required.' });
+    }
+
+    db.prepare('UPDATE employees SET team_id = NULL WHERE id = ? AND team_id = ?').run(employee_id, teamId);
+
+    if (supabase) {
+      try {
+        await supabase.from('employees').update({ team_id: null }).eq('id', employee_id);
+      } catch (sbErr) {
+        console.warn('Supabase team remove member error:', sbErr.message);
+      }
+    }
+
+    res.json({ message: 'Member removed from team successfully.' });
+  } catch (err) {
+    console.error('Error removing member from team:', err);
+    res.status(500).json({ error: err.message || 'Failed to remove member from team.' });
+  }
+});
+
 // --- DESIGNATIONS ---
 
 // GET /api/teams/designations/list
-router.get('/designations/list', authenticate, (req, res) => {
+router.get('/designations/list', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const designations = db.prepare(`
       SELECT d.*, (SELECT COUNT(*) FROM employees e WHERE e.designation_id = d.id AND e.employment_status = 'active') as employee_count
       FROM designations d
@@ -126,7 +243,7 @@ router.get('/designations/list', authenticate, (req, res) => {
 });
 
 // POST /api/teams/designations/create
-router.post('/designations/create', authenticate, requireManager, (req, res) => {
+router.post('/designations/create', authenticate, requireManager, async (req, res) => {
   try {
     const { title, department, level, description } = req.body;
     if (!title || !department) {
@@ -138,9 +255,26 @@ router.post('/designations/create', authenticate, requireManager, (req, res) => 
       VALUES (?, ?, ?, ?, 'active')
     `).run(title.trim(), department.trim(), level || 'Mid-Level', description || '');
 
+    const newId = result.lastInsertRowid;
+
+    if (supabase) {
+      try {
+        await supabase.from('designations').upsert({
+          id: newId,
+          title: title.trim(),
+          department: department.trim(),
+          level: level || 'Mid-Level',
+          description: description || '',
+          status: 'active'
+        });
+      } catch (sbErr) {
+        console.warn('Supabase designation insert error:', sbErr.message);
+      }
+    }
+
     res.status(201).json({
       message: 'Designation added successfully!',
-      designation_id: result.lastInsertRowid
+      designation_id: newId
     });
   } catch (err) {
     console.error('Error adding designation:', err);
@@ -149,8 +283,9 @@ router.post('/designations/create', authenticate, requireManager, (req, res) => 
 });
 
 // PUT /api/teams/designations/:id
-router.put('/designations/:id', authenticate, requireManager, (req, res) => {
+router.put('/designations/:id', authenticate, requireManager, async (req, res) => {
   try {
+    const desigId = parseInt(req.params.id, 10);
     const { title, department, level, description, status } = req.body;
     db.prepare(`
       UPDATE designations
@@ -160,7 +295,23 @@ router.put('/designations/:id', authenticate, requireManager, (req, res) => {
           description = COALESCE(?, description),
           status = COALESCE(?, status)
       WHERE id = ?
-    `).run(title, department, level, description, status, req.params.id);
+    `).run(title, department, level, description, status, desigId);
+
+    const updated = db.prepare('SELECT * FROM designations WHERE id = ?').get(desigId);
+
+    if (supabase && updated) {
+      try {
+        await supabase.from('designations').update({
+          title: updated.title,
+          department: updated.department,
+          level: updated.level,
+          description: updated.description,
+          status: updated.status
+        }).eq('id', desigId);
+      } catch (sbErr) {
+        console.warn('Supabase designation update error:', sbErr.message);
+      }
+    }
 
     res.json({ message: 'Designation updated successfully!' });
   } catch (err) {
@@ -170,10 +321,21 @@ router.put('/designations/:id', authenticate, requireManager, (req, res) => {
 });
 
 // DELETE /api/teams/designations/:id
-router.delete('/designations/:id', authenticate, requireManager, (req, res) => {
+router.delete('/designations/:id', authenticate, requireManager, async (req, res) => {
   try {
-    db.prepare('UPDATE employees SET designation_id = NULL WHERE designation_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM designations WHERE id = ?').run(req.params.id);
+    const desigId = parseInt(req.params.id, 10);
+    db.prepare('UPDATE employees SET designation_id = NULL WHERE designation_id = ?').run(desigId);
+    db.prepare('DELETE FROM designations WHERE id = ?').run(desigId);
+
+    if (supabase) {
+      try {
+        await supabase.from('employees').update({ designation_id: null }).eq('designation_id', desigId);
+        await supabase.from('designations').delete().eq('id', desigId);
+      } catch (sbErr) {
+        console.warn('Supabase designation delete error:', sbErr.message);
+      }
+    }
+
     res.json({ message: 'Designation removed successfully.' });
   } catch (err) {
     console.error('Error deleting designation:', err);

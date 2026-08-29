@@ -257,6 +257,14 @@ export const api = {
     delete: (id) => request(`/teams/${id}`, {
       method: 'DELETE'
     }),
+    assignMember: (teamId, data) => request(`/teams/${teamId}/assign-member`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    }),
+    removeMember: (teamId, employeeId) => request(`/teams/${teamId}/remove-member`, {
+      method: 'POST',
+      body: JSON.stringify({ employee_id: employeeId })
+    }),
     getDesignations: () => request('/teams/designations/list'),
     createDesignation: (data) => request('/teams/designations/create', {
       method: 'POST',
@@ -298,6 +306,13 @@ export const api = {
     createClient: (data) => request('/projects/clients/create', {
       method: 'POST',
       body: JSON.stringify(data)
+    }),
+    updateClient: (id, data) => request(`/projects/clients/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    }),
+    deleteClient: (id) => request(`/projects/clients/${id}`, {
+      method: 'DELETE'
     })
   },
 

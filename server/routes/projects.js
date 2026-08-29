@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
+const { db, supabase, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
 
 // GET /api/projects (List projects with client name, manager, team, and assigned employees)
-router.get('/', authenticate, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const projects = db.prepare(`
       SELECT p.*, 
              c.name as client_name, c.code as client_code,
@@ -27,8 +31,12 @@ router.get('/', authenticate, (req, res) => {
 });
 
 // GET /api/projects/:id (Get project details and assigned member list)
-router.get('/:id', authenticate, (req, res) => {
+router.get('/:id', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const project = db.prepare(`
       SELECT p.*, 
              c.name as client_name, c.code as client_code, c.contact_person, c.email as client_email,
@@ -62,7 +70,7 @@ router.get('/:id', authenticate, (req, res) => {
 });
 
 // POST /api/projects (Create project - Manager only)
-router.post('/', authenticate, requireManager, (req, res) => {
+router.post('/', authenticate, requireManager, async (req, res) => {
   try {
     const { client_id, name, project_code, description, project_manager_id, team_id, start_date, end_date, priority, budget } = req.body;
     if (!client_id || !name || !project_code) {
@@ -78,9 +86,32 @@ router.post('/', authenticate, requireManager, (req, res) => {
       start_date || null, end_date || null, priority || 'medium', budget || 0
     );
 
+    const newPrjId = result.lastInsertRowid;
+
+    if (supabase) {
+      try {
+        await supabase.from('projects').upsert({
+          id: newPrjId,
+          client_id: parseInt(client_id, 10),
+          name: name.trim(),
+          project_code: project_code.trim().toUpperCase(),
+          description: description || '',
+          project_manager_id: project_manager_id ? parseInt(project_manager_id, 10) : null,
+          team_id: team_id ? parseInt(team_id, 10) : null,
+          start_date: start_date || null,
+          end_date: end_date || null,
+          priority: priority || 'medium',
+          budget: parseFloat(budget) || 0,
+          status: 'active'
+        });
+      } catch (sbErr) {
+        console.warn('Supabase project insert error:', sbErr.message);
+      }
+    }
+
     res.status(201).json({
       message: 'Project created successfully!',
-      project_id: result.lastInsertRowid
+      project_id: newPrjId
     });
   } catch (err) {
     console.error('Error creating project:', err);
@@ -89,8 +120,9 @@ router.post('/', authenticate, requireManager, (req, res) => {
 });
 
 // PUT /api/projects/:id (Update project)
-router.put('/:id', authenticate, requireManager, (req, res) => {
+router.put('/:id', authenticate, requireManager, async (req, res) => {
   try {
+    const prjId = parseInt(req.params.id, 10);
     const { name, project_code, description, project_manager_id, team_id, start_date, end_date, status, priority, budget } = req.body;
     db.prepare(`
       UPDATE projects
@@ -105,7 +137,28 @@ router.put('/:id', authenticate, requireManager, (req, res) => {
           priority = COALESCE(?, priority),
           budget = COALESCE(?, budget)
       WHERE id = ?
-    `).run(name, project_code, description, project_manager_id || null, team_id || null, start_date, end_date, status, priority, budget, req.params.id);
+    `).run(name, project_code, description, project_manager_id || null, team_id || null, start_date, end_date, status, priority, budget, prjId);
+
+    const updated = db.prepare('SELECT * FROM projects WHERE id = ?').get(prjId);
+
+    if (supabase && updated) {
+      try {
+        await supabase.from('projects').update({
+          name: updated.name,
+          project_code: updated.project_code,
+          description: updated.description,
+          project_manager_id: updated.project_manager_id || null,
+          team_id: updated.team_id || null,
+          start_date: updated.start_date || null,
+          end_date: updated.end_date || null,
+          status: updated.status,
+          priority: updated.priority,
+          budget: updated.budget
+        }).eq('id', prjId);
+      } catch (sbErr) {
+        console.warn('Supabase project update error:', sbErr.message);
+      }
+    }
 
     res.json({ message: 'Project updated successfully!' });
   } catch (err) {
@@ -115,10 +168,21 @@ router.put('/:id', authenticate, requireManager, (req, res) => {
 });
 
 // DELETE /api/projects/:id
-router.delete('/:id', authenticate, requireManager, (req, res) => {
+router.delete('/:id', authenticate, requireManager, async (req, res) => {
   try {
-    db.prepare('DELETE FROM project_assignments WHERE project_id = ?').run(req.params.id);
-    db.prepare('DELETE FROM projects WHERE id = ?').run(req.params.id);
+    const prjId = parseInt(req.params.id, 10);
+    db.prepare('DELETE FROM project_assignments WHERE project_id = ?').run(prjId);
+    db.prepare('DELETE FROM projects WHERE id = ?').run(prjId);
+
+    if (supabase) {
+      try {
+        await supabase.from('project_assignments').delete().eq('project_id', prjId);
+        await supabase.from('projects').delete().eq('id', prjId);
+      } catch (sbErr) {
+        console.warn('Supabase project delete error:', sbErr.message);
+      }
+    }
+
     res.json({ message: 'Project deleted successfully.' });
   } catch (err) {
     console.error('Error deleting project:', err);
@@ -129,7 +193,7 @@ router.delete('/:id', authenticate, requireManager, (req, res) => {
 // --- WORK ASSIGNMENTS ---
 
 // POST /api/projects/assign (Assign employee to project)
-router.post('/assign', authenticate, requireManager, (req, res) => {
+router.post('/assign', authenticate, requireManager, async (req, res) => {
   try {
     const { project_id, employee_id, role_on_project, allocation_percent, start_date, end_date } = req.body;
     if (!project_id || !employee_id) {
@@ -150,6 +214,22 @@ router.post('/assign', authenticate, requireManager, (req, res) => {
       allocation_percent || 100, start_date || null, end_date || null
     );
 
+    if (supabase) {
+      try {
+        await supabase.from('project_assignments').upsert({
+          project_id: parseInt(project_id, 10),
+          employee_id: parseInt(employee_id, 10),
+          role_on_project: role_on_project || 'Research Analyst',
+          allocation_percent: parseInt(allocation_percent, 10) || 100,
+          start_date: start_date || null,
+          end_date: end_date || null,
+          status: 'active'
+        }, { onConflict: 'project_id,employee_id' });
+      } catch (sbErr) {
+        console.warn('Supabase assignment upsert error:', sbErr.message);
+      }
+    }
+
     res.json({ message: 'Employee assigned to project successfully!' });
   } catch (err) {
     console.error('Error assigning employee:', err);
@@ -158,9 +238,19 @@ router.post('/assign', authenticate, requireManager, (req, res) => {
 });
 
 // DELETE /api/projects/assignment/:id (Remove assignment)
-router.delete('/assignment/:id', authenticate, requireManager, (req, res) => {
+router.delete('/assignment/:id', authenticate, requireManager, async (req, res) => {
   try {
-    db.prepare('DELETE FROM project_assignments WHERE id = ?').run(req.params.id);
+    const assignId = parseInt(req.params.id, 10);
+    db.prepare('DELETE FROM project_assignments WHERE id = ?').run(assignId);
+
+    if (supabase) {
+      try {
+        await supabase.from('project_assignments').delete().eq('id', assignId);
+      } catch (sbErr) {
+        console.warn('Supabase assignment delete error:', sbErr.message);
+      }
+    }
+
     res.json({ message: 'Assignment removed successfully.' });
   } catch (err) {
     console.error('Error removing assignment:', err);
@@ -171,8 +261,12 @@ router.delete('/assignment/:id', authenticate, requireManager, (req, res) => {
 // --- TEAM WORKLOAD & UTILIZATION ---
 
 // GET /api/projects/workload/overview
-router.get('/workload/overview', authenticate, (req, res) => {
+router.get('/workload/overview', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const teams = db.prepare(`
       SELECT t.id, t.name, t.department,
              COUNT(DISTINCT e.id) as total_employees,
@@ -208,8 +302,12 @@ router.get('/workload/overview', authenticate, (req, res) => {
 // --- CLIENTS ---
 
 // GET /api/projects/clients/list
-router.get('/clients/list', authenticate, (req, res) => {
+router.get('/clients/list', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
     const clients = db.prepare(`
       SELECT c.*, (SELECT COUNT(*) FROM projects p WHERE p.client_id = c.id) as project_count
       FROM clients c
@@ -224,7 +322,7 @@ router.get('/clients/list', authenticate, (req, res) => {
 });
 
 // POST /api/projects/clients/create
-router.post('/clients/create', authenticate, requireManager, (req, res) => {
+router.post('/clients/create', authenticate, requireManager, async (req, res) => {
   try {
     const { name, code, industry, contact_person, email, phone } = req.body;
     if (!name || !code) {
@@ -236,13 +334,97 @@ router.post('/clients/create', authenticate, requireManager, (req, res) => {
       VALUES (?, ?, ?, ?, ?, ?, 'active')
     `).run(name.trim(), code.trim().toUpperCase(), industry || 'E-Commerce', contact_person || '', email || '', phone || '');
 
+    const newClientId = result.lastInsertRowid;
+
+    if (supabase) {
+      try {
+        await supabase.from('clients').upsert({
+          id: newClientId,
+          name: name.trim(),
+          code: code.trim().toUpperCase(),
+          industry: industry || 'E-Commerce',
+          contact_person: contact_person || '',
+          email: email || '',
+          phone: phone || '',
+          status: 'active'
+        });
+      } catch (sbErr) {
+        console.warn('Supabase client insert error:', sbErr.message);
+      }
+    }
+
     res.status(201).json({
       message: 'Client added successfully!',
-      client_id: result.lastInsertRowid
+      client_id: newClientId
     });
   } catch (err) {
     console.error('Error adding client:', err);
     res.status(500).json({ error: err.message || 'Failed to add client.' });
+  }
+});
+
+// PUT /api/projects/clients/:id
+router.put('/clients/:id', authenticate, requireManager, async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.id, 10);
+    const { name, code, industry, contact_person, email, phone, status } = req.body;
+    db.prepare(`
+      UPDATE clients
+      SET name = COALESCE(?, name),
+          code = COALESCE(?, code),
+          industry = COALESCE(?, industry),
+          contact_person = COALESCE(?, contact_person),
+          email = COALESCE(?, email),
+          phone = COALESCE(?, phone),
+          status = COALESCE(?, status)
+      WHERE id = ?
+    `).run(name, code, industry, contact_person, email, phone, status, clientId);
+
+    const updated = db.prepare('SELECT * FROM clients WHERE id = ?').get(clientId);
+
+    if (supabase && updated) {
+      try {
+        await supabase.from('clients').update({
+          name: updated.name,
+          code: updated.code,
+          industry: updated.industry,
+          contact_person: updated.contact_person,
+          email: updated.email,
+          phone: updated.phone,
+          status: updated.status
+        }).eq('id', clientId);
+      } catch (sbErr) {
+        console.warn('Supabase client update error:', sbErr.message);
+      }
+    }
+
+    res.json({ message: 'Client updated successfully!' });
+  } catch (err) {
+    console.error('Error updating client:', err);
+    res.status(500).json({ error: err.message || 'Failed to update client.' });
+  }
+});
+
+// DELETE /api/projects/clients/:id
+router.delete('/clients/:id', authenticate, requireManager, async (req, res) => {
+  try {
+    const clientId = parseInt(req.params.id, 10);
+    db.prepare('DELETE FROM projects WHERE client_id = ?').run(clientId);
+    db.prepare('DELETE FROM clients WHERE id = ?').run(clientId);
+
+    if (supabase) {
+      try {
+        await supabase.from('projects').delete().eq('client_id', clientId);
+        await supabase.from('clients').delete().eq('id', clientId);
+      } catch (sbErr) {
+        console.warn('Supabase client delete error:', sbErr.message);
+      }
+    }
+
+    res.json({ message: 'Client deleted successfully.' });
+  } catch (err) {
+    console.error('Error deleting client:', err);
+    res.status(500).json({ error: 'Failed to delete client.' });
   }
 });
 
