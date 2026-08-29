@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { FileCheck, Plus, CheckCircle2, XCircle, Clock, Search, Calendar, FolderKanban, Trash2 } from 'lucide-react';
+import { FileCheck, Plus, CheckCircle2, XCircle, Clock, Search, Calendar, FolderKanban, Trash2, Loader2 } from 'lucide-react';
 
 export default function Timesheets() {
   const { user, isManager, showToast } = useAuth();
@@ -99,9 +99,14 @@ export default function Timesheets() {
             Record research tasks, client project hours, and manage manager approvals.
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
-          <Plus size={16} /> Log Work Timesheet
-        </button>
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button className="btn btn-secondary" onClick={() => loadData()} title="Refresh Timesheets">
+            <Loader2 size={15} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+          <button className="btn btn-primary" onClick={() => setShowModal(true)}>
+            <Plus size={16} /> Log Work Timesheet
+          </button>
+        </div>
       </div>
 
       {/* Filter Tabs */}
@@ -124,7 +129,11 @@ export default function Timesheets() {
       {/* Timesheets Table */}
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
         {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading timesheets...</div>
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <Loader2 className="animate-spin" size={32} color="var(--brand-green)" style={{ margin: '0 auto 0.85rem' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Loading Project Timesheets...</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Retrieving work hours, client deliverables, and manager approvals</div>
+          </div>
         ) : timesheets.length === 0 ? (
           <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)' }}>
             No timesheet logs found for the selected filter.

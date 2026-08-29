@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   AlertCircle,
   X,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 import PunchClockModal from '../components/TimeClock/PunchClockModal';
 
@@ -148,7 +149,12 @@ export default function TimeLogs() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary" onClick={() => loadData()} title="Refresh Live Data">
+            <Loader2 size={16} className={loading ? "animate-spin" : ""} />
+            <span>Refresh</span>
+          </button>
+
           <button className="btn btn-primary" onClick={() => setShowPunchModal(true)}>
             <Clock size={16} />
             <span>Open Punch Clock</span>
@@ -193,86 +199,104 @@ export default function TimeLogs() {
           ========================================== */}
       {isManager && activeTab === 'live' && (
         <div>
-          <div className="grid-kpi" style={{ marginBottom: '1.5rem' }}>
-            <div className="stat-card emerald">
-              <div className="stat-info">
-                <div className="label">Clocked In & Working</div>
-                <div className="value" style={{ color: 'var(--success)' }}>
-                  {liveStatus.filter(s => s.punch_status === 'clocked_in').length}
-                </div>
-                <div className="subtext">Active on shifts</div>
-              </div>
-              <div className="stat-icon emerald"><Clock size={22} /></div>
+          {loading ? (
+            <div className="glass-card" style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+              <Loader2 className="animate-spin" size={32} color="var(--brand-green)" style={{ margin: '0 auto 0.85rem' }} />
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Loading Live Floor Attendance...</div>
+              <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Synchronizing real-time shift punches from cloud database</div>
             </div>
-
-            <div className="stat-card amber">
-              <div className="stat-info">
-                <div className="label">On Lunch / Break</div>
-                <div className="value" style={{ color: 'var(--warning)' }}>
-                  {liveStatus.filter(s => s.punch_status === 'on_break').length}
+          ) : (
+            <>
+              <div className="grid-kpi" style={{ marginBottom: '1.5rem' }}>
+                <div className="stat-card emerald">
+                  <div className="stat-info">
+                    <div className="label">Clocked In & Working</div>
+                    <div className="value" style={{ color: 'var(--success)' }}>
+                      {liveStatus.filter(s => s.punch_status === 'clocked_in').length}
+                    </div>
+                    <div className="subtext">Active on shifts</div>
+                  </div>
+                  <div className="stat-icon emerald"><Clock size={22} /></div>
                 </div>
-                <div className="subtext">Rest interval</div>
-              </div>
-              <div className="stat-icon amber"><Coffee size={22} /></div>
-            </div>
 
-            <div className="stat-card">
-              <div className="stat-info">
-                <div className="label">Shift Ended / Out</div>
-                <div className="value">
-                  {liveStatus.filter(s => s.punch_status === 'clocked_out' || !s.punch_status).length}
+                <div className="stat-card amber">
+                  <div className="stat-info">
+                    <div className="label">On Lunch / Break</div>
+                    <div className="value" style={{ color: 'var(--warning)' }}>
+                      {liveStatus.filter(s => s.punch_status === 'on_break').length}
+                    </div>
+                    <div className="subtext">Rest interval</div>
+                  </div>
+                  <div className="stat-icon amber"><Coffee size={22} /></div>
                 </div>
-                <div className="subtext">Completed or absent</div>
-              </div>
-              <div className="stat-icon"><StopCircle size={22} /></div>
-            </div>
-          </div>
 
-          <div className="table-container">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>Employee</th>
-                  <th>Department</th>
-                  <th>Clock In</th>
-                  <th>Break Start</th>
-                  <th>Break End</th>
-                  <th>Clock Out</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {liveStatus.map((emp) => (
-                  <tr key={emp.id}>
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <div className="user-avatar">
-                          {emp.avatar_url ? <img src={emp.avatar_url} alt="Avatar" /> : emp.first_name[0]}
-                        </div>
-                        <div>
-                          <div style={{ fontWeight: '700' }}>{emp.first_name} {emp.last_name}</div>
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.employee_code} • {emp.job_title}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td>{emp.department}</td>
-                    <td style={{ fontWeight: '600', color: emp.clock_in ? 'var(--success)' : 'var(--text-muted)' }}>
-                      {formatTime(emp.clock_in)}
-                    </td>
-                    <td>{formatTime(emp.break_start)}</td>
-                    <td>{formatTime(emp.break_end)}</td>
-                    <td>{formatTime(emp.clock_out)}</td>
-                    <td>
-                      <span className={`badge badge-${emp.punch_status === 'clocked_in' ? 'success' : (emp.punch_status === 'on_break' ? 'warning' : 'neutral')}`}>
-                        <span className={`status-dot ${emp.punch_status || 'clocked_out'}`} style={{ width: '6px', height: '6px' }} />
-                        {emp.punch_status === 'clocked_in' ? 'Working' : (emp.punch_status === 'on_break' ? 'On Break' : (emp.punch_status === 'clocked_out' ? 'Clocked Out' : 'Not Clocked In'))}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                <div className="stat-card">
+                  <div className="stat-info">
+                    <div className="label">Shift Ended / Out</div>
+                    <div className="value">
+                      {liveStatus.filter(s => s.punch_status === 'clocked_out' || !s.punch_status).length}
+                    </div>
+                    <div className="subtext">Completed or absent</div>
+                  </div>
+                  <div className="stat-icon"><StopCircle size={22} /></div>
+                </div>
+              </div>
+
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Department</th>
+                      <th>Clock In</th>
+                      <th>Break Start</th>
+                      <th>Break End</th>
+                      <th>Clock Out</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {liveStatus.length === 0 ? (
+                      <tr>
+                        <td colSpan={7} style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                          No employee attendance records found today.
+                        </td>
+                      </tr>
+                    ) : (
+                      liveStatus.map((emp) => (
+                        <tr key={emp.id}>
+                          <td>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                              <div className="user-avatar">
+                                {emp.avatar_url ? <img src={emp.avatar_url} alt="Avatar" /> : emp.first_name[0]}
+                              </div>
+                              <div>
+                                <div style={{ fontWeight: '700' }}>{emp.first_name} {emp.last_name}</div>
+                                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{emp.employee_code} • {emp.job_title}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td>{emp.department}</td>
+                          <td style={{ fontWeight: '600', color: emp.clock_in ? 'var(--success)' : 'var(--text-muted)' }}>
+                            {formatTime(emp.clock_in)}
+                          </td>
+                          <td>{formatTime(emp.break_start)}</td>
+                          <td>{formatTime(emp.break_end)}</td>
+                          <td>{formatTime(emp.clock_out)}</td>
+                          <td>
+                            <span className={`badge badge-${emp.punch_status === 'clocked_in' ? 'success' : (emp.punch_status === 'on_break' ? 'warning' : 'neutral')}`}>
+                              <span className={`status-dot ${emp.punch_status || 'clocked_out'}`} style={{ width: '6px', height: '6px' }} />
+                              {emp.punch_status === 'clocked_in' ? 'Working' : (emp.punch_status === 'on_break' ? 'On Break' : (emp.punch_status === 'clocked_out' ? 'Clocked Out' : 'Not Clocked In'))}
+                            </span>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -355,13 +379,15 @@ export default function TimeLogs() {
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
-                      Loading timesheets...
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-secondary)' }}>
+                      <Loader2 className="animate-spin" size={28} color="var(--brand-green)" style={{ margin: '0 auto 0.65rem' }} />
+                      <div style={{ fontWeight: 700, fontSize: '0.92rem', color: 'var(--text-primary)' }}>Loading Timesheet Records...</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Retrieving work hours and shift logs</div>
                     </td>
                   </tr>
                 ) : logs.length === 0 ? (
                   <tr>
-                    <td colSpan="9" style={{ textAlign: 'center', padding: '2.5rem', color: 'var(--text-muted)' }}>
+                    <td colSpan="9" style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)' }}>
                       No punch records found for this period.
                     </td>
                   </tr>
