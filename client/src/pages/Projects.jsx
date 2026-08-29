@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { FolderKanban, Plus, Users, Briefcase, Calendar, CheckCircle2, Search, BarChart2, ArrowUpRight, Clock, ShieldAlert, X, Edit2, Trash2 } from 'lucide-react';
+import { FolderKanban, Plus, Users, Briefcase, Calendar, CheckCircle2, Search, BarChart2, ArrowUpRight, Clock, ShieldAlert, X, Edit2, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function Projects() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [activeTab, setActiveTab] = useState('projects'); // 'projects', 'clients', 'workload'
   const [projects, setProjects] = useState([]);
   const [clients, setClients] = useState([]);
@@ -12,6 +12,8 @@ export default function Projects() {
   const [employees, setEmployees] = useState([]);
   const [workloadData, setWorkloadData] = useState({ teams: [], employeeWorkloads: [] });
   const [loading, setLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Modals
   const [showProjectModal, setShowProjectModal] = useState(false);
@@ -51,12 +53,35 @@ export default function Projects() {
     phone: ''
   });
 
+  // Guard query execution until auth is fully resolved
   useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, []);
+  }, [token, user?.id, authLoading]);
+
+  // Global cache invalidation subscriber
+  useEffect(() => {
+    const handleInvalidate = () => {
+      if (token && !authLoading) {
+        loadData();
+      }
+    };
+    window.addEventListener('projects:invalidate', handleInvalidate);
+    window.addEventListener('teams:invalidate', handleInvalidate);
+    return () => {
+      window.removeEventListener('projects:invalidate', handleInvalidate);
+      window.removeEventListener('teams:invalidate', handleInvalidate);
+    };
+  }, [token, authLoading]);
 
   const loadData = async () => {
     setLoading(true);
+    setIsError(false);
+    setErrorMessage('');
     try {
       const [prjRes, clientRes, teamRes, empRes, workloadRes] = await Promise.all([
         api.projects.getAll(),
@@ -71,6 +96,8 @@ export default function Projects() {
       setEmployees(empRes.employees || []);
       setWorkloadData(workloadRes || { teams: [], employeeWorkloads: [] });
     } catch (err) {
+      setIsError(true);
+      setErrorMessage(err.message || 'Failed to load projects and operations data.');
       showToast(err.message, 'danger');
     } finally {
       setLoading(false);
@@ -96,6 +123,7 @@ export default function Projects() {
         budget: ''
       });
       loadData();
+      window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -116,6 +144,7 @@ export default function Projects() {
         end_date: ''
       });
       loadData();
+      window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -136,6 +165,7 @@ export default function Projects() {
         phone: ''
       });
       loadData();
+      window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -147,6 +177,7 @@ export default function Projects() {
       await api.projects.deleteClient(id);
       showToast('Client deleted successfully.', 'info');
       loadData();
+      window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -164,16 +195,25 @@ export default function Projects() {
             Track client research intelligence projects, work assignments, and agency team workload.
           </p>
         </div>
-        {isManager && (
-          <div style={{ display: 'flex', gap: '0.6rem' }}>
-            <button className="btn btn-secondary" onClick={() => setShowClientModal(true)}>
-              <Plus size={15} /> Add Client
-            </button>
-            <button className="btn btn-primary" onClick={() => setShowProjectModal(true)}>
-              <Plus size={15} /> Add Project
-            </button>
-          </div>
-        )}
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => loadData()}
+            title="Refresh Projects &amp; Clients"
+          >
+            <Loader2 size={14} className={loading ? "animate-spin" : ""} /> Refresh
+          </button>
+          {isManager && (
+            <>
+              <button className="btn btn-secondary" onClick={() => setShowClientModal(true)}>
+                <Plus size={15} /> Add Client
+              </button>
+              <button className="btn btn-primary" onClick={() => setShowProjectModal(true)}>
+                <Plus size={15} /> Add Project
+              </button>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Navigation Sub-Tabs */}
@@ -198,57 +238,104 @@ export default function Projects() {
         </button>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading operations data...</div>
+      {/* Content Rendering / Loading / Error States */}
+      {(loading || authLoading) ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <Loader2 className="animate-spin" size={32} color="var(--brand-green)" style={{ margin: '0 auto 0.75rem' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Hydrating Client Projects &amp; Workload Data...</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Synchronizing enterprise client records from EcomEdge Cloud</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="skeleton-pulse" style={{ height: '210px', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div style={{ height: '22px', width: '35%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+                <div style={{ height: '32px', width: '65%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+                <div style={{ height: '40px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : isError ? (
+        <div className="glass-card" style={{ padding: '3.5rem 1.5rem', textAlign: 'center' }}>
+          <AlertTriangle size={36} color="var(--danger)" style={{ margin: '0 auto 0.75rem' }} />
+          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Unable to Load Operations Data</div>
+          <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.35rem', maxWidth: '420px', margin: '0.35rem auto 1rem' }}>
+            {errorMessage || 'A network error occurred while retrieving project records.'}
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => loadData()}>
+            Retry Connection
+          </button>
+        </div>
       ) : activeTab === 'projects' ? (
         /* PROJECTS VIEW */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
-          {projects.map(prj => (
-            <div key={prj.id} className="glass-card project-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
-                <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                  {prj.client_name || 'Client Account'}
-                </span>
-                <span className={`badge ${prj.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
-                  {prj.status}
-                </span>
-              </div>
-
-              <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                {prj.name}
-              </h3>
-              <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--brand-green)', marginBottom: '0.6rem' }}>
-                CODE: {prj.project_code} • {prj.team_name || 'Research Team'}
-              </div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', minHeight: '36px', lineHeight: '1.4' }}>
-                {prj.description || 'Deliverable-driven marketplace analytics and research scope.'}
-              </p>
-
-              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Manager: <strong style={{ color: 'var(--text-primary)' }}>{prj.pm_first_name ? `${prj.pm_first_name} ${prj.pm_last_name}` : 'Unassigned'}</strong>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-green)' }}>
-                    {prj.assigned_count || 0} Assigned
-                  </span>
-                  {isManager && (
-                    <button
-                      className="btn btn-secondary btn-sm"
-                      onClick={() => {
-                        setAssignForm({ ...assignForm, project_id: prj.id });
-                        setShowAssignModal(true);
-                      }}
-                      title="Assign Staff"
-                    >
-                      <Plus size={13} /> Assign
-                    </button>
-                  )}
-                </div>
-              </div>
+        projects.length === 0 ? (
+          <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+            <FolderKanban size={38} color="var(--text-muted)" style={{ margin: '0 auto 0.85rem', opacity: 0.6 }} />
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>No active projects found</div>
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.3rem', maxWidth: '440px', margin: '0.3rem auto 1.25rem' }}>
+              No research or analytics projects are currently active. Click below to initialize a client project deliverable.
+            </p>
+            <div style={{ display: 'inline-flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => loadData()}>
+                Refresh
+              </button>
+              {isManager && (
+                <button className="btn btn-primary btn-sm" onClick={() => setShowProjectModal(true)}>
+                  <Plus size={14} /> Add Project
+                </button>
+              )}
             </div>
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+            {projects.map(prj => (
+              <div key={prj.id} className="glass-card project-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
+                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
+                    {prj.client_name || 'Client Account'}
+                  </span>
+                  <span className={`badge ${prj.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
+                    {prj.status}
+                  </span>
+                </div>
+
+                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                  {prj.name}
+                </h3>
+                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--brand-green)', marginBottom: '0.6rem' }}>
+                  CODE: {prj.project_code} • {prj.team_name || 'Research Team'}
+                </div>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', minHeight: '36px', lineHeight: '1.4' }}>
+                  {prj.description || 'Deliverable-driven marketplace analytics and research scope.'}
+                </p>
+
+                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                    Manager: <strong style={{ color: 'var(--text-primary)' }}>{prj.pm_first_name ? `${prj.pm_first_name} ${prj.pm_last_name}` : 'Unassigned'}</strong>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-green)' }}>
+                      {prj.assigned_count || 0} Assigned
+                    </span>
+                    {isManager && (
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setAssignForm({ ...assignForm, project_id: prj.id });
+                          setShowAssignModal(true);
+                        }}
+                        title="Assign Staff"
+                      >
+                        <Plus size={13} /> Assign
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
       ) : activeTab === 'workload' ? (
         /* TEAM WORKLOAD VIEW */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
@@ -355,39 +442,59 @@ export default function Projects() {
         </div>
       ) : (
         /* CLIENTS VIEW */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-          {clients.map(client => (
-            <div key={client.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
-                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{client.code}</span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                    <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{client.project_count || 0} Projects</span>
-                    {isManager && (
-                      <button
-                        className="btn-icon"
-                        onClick={() => handleDeleteClient(client.id, client.name)}
-                        title="Delete Client"
-                        style={{ width: '28px', height: '28px', color: 'var(--danger)' }}
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    )}
+        clients.length === 0 ? (
+          <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+            <Briefcase size={38} color="var(--text-muted)" style={{ margin: '0 auto 0.85rem', opacity: 0.6 }} />
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>No client accounts registered</div>
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.3rem', maxWidth: '440px', margin: '0.3rem auto 1.25rem' }}>
+              No commercial client profiles have been configured yet. Click below to add an e-commerce brand or agency partner.
+            </p>
+            <div style={{ display: 'inline-flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <button className="btn btn-secondary btn-sm" onClick={() => loadData()}>
+                Refresh
+              </button>
+              {isManager && (
+                <button className="btn btn-primary btn-sm" onClick={() => setShowClientModal(true)}>
+                  <Plus size={14} /> Add Client
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+            {clients.map(client => (
+              <div key={client.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
+                    <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{client.code}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{client.project_count || 0} Projects</span>
+                      {isManager && (
+                        <button
+                          className="btn-icon"
+                          onClick={() => handleDeleteClient(client.id, client.name)}
+                          title="Delete Client"
+                          style={{ width: '28px', height: '28px', color: 'var(--danger)' }}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.35rem' }}>{client.name}</h3>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--brand-green)', fontWeight: 700, marginBottom: '0.75rem' }}>
+                    {client.industry}
                   </div>
                 </div>
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '0.35rem' }}>{client.name}</h3>
-                <div style={{ fontSize: '0.78rem', color: 'var(--brand-green)', fontWeight: 700, marginBottom: '0.75rem' }}>
-                  {client.industry}
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+                  <div>Contact: <strong style={{ color: 'var(--text-primary)' }}>{client.contact_person || 'N/A'}</strong></div>
+                  <div>Email: <strong style={{ color: 'var(--text-primary)' }}>{client.email || 'N/A'}</strong></div>
+                  <div>Phone: <strong style={{ color: 'var(--text-primary)' }}>{client.phone || 'N/A'}</strong></div>
                 </div>
               </div>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.25rem', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-                <div>Contact: <strong style={{ color: 'var(--text-primary)' }}>{client.contact_person || 'N/A'}</strong></div>
-                <div>Email: <strong style={{ color: 'var(--text-primary)' }}>{client.email || 'N/A'}</strong></div>
-                <div>Phone: <strong style={{ color: 'var(--text-primary)' }}>{client.phone || 'N/A'}</strong></div>
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )
       )}
 
       {/* Add Project Modal */}

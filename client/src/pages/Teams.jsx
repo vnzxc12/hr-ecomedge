@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { Building2, Users, Plus, Edit2, Trash2, CheckCircle2, Search, ArrowRight, UserCheck, UserPlus, UserMinus, X, ShieldCheck } from 'lucide-react';
+import { Building2, Users, Plus, Edit2, Trash2, CheckCircle2, Search, ArrowRight, UserCheck, UserPlus, UserMinus, X, ShieldCheck, Loader2, AlertTriangle } from 'lucide-react';
 
 export default function Teams() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [teams, setTeams] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [search, setSearch] = useState('');
 
   // Modals
@@ -23,12 +25,31 @@ export default function Teams() {
   const [loadingMembers, setLoadingMembers] = useState(false);
   const [isAssigning, setIsAssigning] = useState(false);
 
+  // Guard query execution until auth is fully resolved
   useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, []);
+  }, [token, user?.id, authLoading]);
+
+  // Global cache invalidation subscriber
+  useEffect(() => {
+    const handleInvalidate = () => {
+      if (token && !authLoading) {
+        loadData();
+      }
+    };
+    window.addEventListener('teams:invalidate', handleInvalidate);
+    return () => window.removeEventListener('teams:invalidate', handleInvalidate);
+  }, [token, authLoading]);
 
   const loadData = async () => {
     setLoading(true);
+    setIsError(false);
+    setErrorMessage('');
     try {
       const [teamRes, empRes] = await Promise.all([
         api.teams.getAll(),
@@ -37,6 +58,8 @@ export default function Teams() {
       setTeams(teamRes.teams || []);
       setEmployees(empRes.employees || []);
     } catch (err) {
+      setIsError(true);
+      setErrorMessage(err.message || 'Failed to load teams & departments.');
       showToast(err.message, 'danger');
     } finally {
       setLoading(false);
@@ -72,6 +95,8 @@ export default function Teams() {
       }
       setShowModal(false);
       loadData();
+      window.dispatchEvent(new CustomEvent('teams:invalidate'));
+      window.dispatchEvent(new CustomEvent('employees:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -83,6 +108,8 @@ export default function Teams() {
       await api.teams.delete(id);
       showToast('Team deleted successfully.', 'info');
       loadData();
+      window.dispatchEvent(new CustomEvent('teams:invalidate'));
+      window.dispatchEvent(new CustomEvent('employees:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -116,6 +143,8 @@ export default function Teams() {
       const res = await api.teams.getById(activeTeamMembers.id);
       setMembersList(res.members || []);
       loadData();
+      window.dispatchEvent(new CustomEvent('teams:invalidate'));
+      window.dispatchEvent(new CustomEvent('employees:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     } finally {
@@ -132,6 +161,8 @@ export default function Teams() {
       const res = await api.teams.getById(activeTeamMembers.id);
       setMembersList(res.members || []);
       loadData();
+      window.dispatchEvent(new CustomEvent('teams:invalidate'));
+      window.dispatchEvent(new CustomEvent('employees:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
     }
@@ -154,11 +185,20 @@ export default function Teams() {
             Manage EcomEdge functional groups, research squads, team assignments, and leadership structures.
           </p>
         </div>
-        {isManager && (
-          <button className="btn btn-primary" onClick={handleOpenAdd}>
-            <Plus size={16} /> Add Team
+        <div style={{ display: 'flex', gap: '0.6rem' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={() => loadData()}
+            title="Refresh Teams"
+          >
+            <Loader2 size={14} className={loading ? "animate-spin" : ""} /> Refresh
           </button>
-        )}
+          {isManager && (
+            <button className="btn btn-primary" onClick={handleOpenAdd}>
+              <Plus size={16} /> Add Team
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
@@ -176,12 +216,57 @@ export default function Teams() {
         </div>
       </div>
 
-      {/* Teams Grid */}
-      {loading ? (
-        <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading teams...</div>
+      {/* Teams Grid / Loading / Error States */}
+      {(loading || authLoading) ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)', background: 'var(--bg-card)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+            <Loader2 className="animate-spin" size={32} color="var(--brand-green)" style={{ margin: '0 auto 0.75rem' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Hydrating Teams &amp; Squad Rosters...</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Synchronizing departmental records from EcomEdge Cloud</div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+            {[1, 2, 3].map(i => (
+              <div key={i} className="skeleton-pulse" style={{ height: '190px', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                <div style={{ height: '20px', width: '40%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+                <div style={{ height: '32px', width: '70%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+                <div style={{ height: '36px', width: '100%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : isError ? (
+        <div className="glass-card" style={{ padding: '3.5rem 1.5rem', textAlign: 'center' }}>
+          <AlertTriangle size={36} color="var(--danger)" style={{ margin: '0 auto 0.75rem' }} />
+          <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Unable to Load Teams</div>
+          <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.35rem', maxWidth: '420px', margin: '0.35rem auto 1rem' }}>
+            {errorMessage || 'A network error occurred while retrieving team data.'}
+          </div>
+          <button className="btn btn-secondary btn-sm" onClick={() => loadData()}>
+            Retry Connection
+          </button>
+        </div>
       ) : filteredTeams.length === 0 ? (
-        <div className="glass-card" style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)' }}>
-          No teams found matching your search.
+        <div className="glass-card" style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+          <Building2 size={38} color="var(--text-muted)" style={{ margin: '0 auto 0.85rem', opacity: 0.6 }} />
+          <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>No teams found</div>
+          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.3rem', maxWidth: '440px', margin: '0.3rem auto 1.25rem' }}>
+            {search ? 'No squads matched your search query.' : 'No teams have been created yet. Click below to add your first operational team.'}
+          </p>
+          <div style={{ display: 'inline-flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+            {search && (
+              <button className="btn btn-secondary btn-sm" onClick={() => setSearch('')}>
+                Clear Search
+              </button>
+            )}
+            <button className="btn btn-secondary btn-sm" onClick={() => loadData()}>
+              Refresh
+            </button>
+            {isManager && (
+              <button className="btn btn-primary btn-sm" onClick={handleOpenAdd}>
+                <Plus size={14} /> Add Team
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>

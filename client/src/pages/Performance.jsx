@@ -4,7 +4,7 @@ import { api } from '../services/api';
 import { Award, Plus, Star, Users, CheckCircle2, Search, Target, TrendingUp, Sparkles } from 'lucide-react';
 
 export default function Performance() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [reviews, setReviews] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -24,9 +24,15 @@ export default function Performance() {
     review_date: new Date().toISOString().split('T')[0]
   });
 
+  // Guard query execution until auth is fully resolved
   useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, []);
+  }, [token, user?.id, authLoading]);
 
   const loadData = async () => {
     setLoading(true);

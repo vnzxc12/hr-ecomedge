@@ -25,7 +25,7 @@ import {
 import confetti from 'canvas-confetti';
 
 export default function Payroll() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [runs, setRuns] = useState([]);
   const [myPayslips, setMyPayslips] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function Payroll() {
   // Edit Single Payslip Deductions/Pay Modal
   const [showEditSlipModal, setShowEditSlipModal] = useState(false);
   const [editingSlip, setEditingSlip] = useState(null);
-  const [slipForm, setSlipForm] = useState({
+  const [editSlipForm, setEditSlipForm] = useState({
     basic_pay: 0,
     overtime_pay: 0,
     allowances: 0,
@@ -61,7 +61,10 @@ export default function Payroll() {
     social_deductions: 0,
     other_deductions: 0,
     total_hours_worked: 0,
-    overtime_hours: 0
+    overtime_hours: 0,
+    gross_pay: 0,
+    net_pay: 0,
+    payment_status: 'unpaid'
   });
   const [savingSlip, setSavingSlip] = useState(false);
 
@@ -70,12 +73,22 @@ export default function Payroll() {
   const [periodEnd, setPeriodEnd] = useState('2026-08-31');
   const [generating, setGenerating] = useState(false);
 
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [token, user?.id, authLoading, isManager]);
+
   const loadData = async () => {
     setLoading(true);
     try {
       if (isManager) {
         const res = await api.payroll.getRuns();
-        setRuns(res.runs || []);
+        setRuns(res.payrolls || []);
       } else {
         const res = await api.payroll.getMyPayslips();
         setMyPayslips(res.payslips || []);
@@ -86,10 +99,6 @@ export default function Payroll() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [isManager]);
 
   const handleGeneratePayroll = async (e) => {
     e.preventDefault();

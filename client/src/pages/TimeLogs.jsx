@@ -21,7 +21,7 @@ import {
 import PunchClockModal from '../components/TimeClock/PunchClockModal';
 
 export default function TimeLogs() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [logs, setLogs] = useState([]);
   const [liveStatus, setLiveStatus] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -50,17 +50,27 @@ export default function TimeLogs() {
   });
   const [submitting, setSubmitting] = useState(false);
 
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [token, user?.id, authLoading, startDate, endDate, selectedEmpId, statusFilter, isManager]);
+
   const loadData = async () => {
     setLoading(true);
     try {
       if (isManager) {
         const [logsRes, liveRes, empsRes] = await Promise.all([
-          api.timelogs.getAll({ startDate, endDate, employeeId: selectedEmpId, status: statusFilter }),
+          api.timelogs.getAll({ startDate, endDate, employee_id: selectedEmpId, status: statusFilter }),
           api.timelogs.getLiveStatus(),
           api.employees.getAll()
         ]);
         setLogs(logsRes.logs || []);
-        setLiveStatus(liveRes.liveStatus || []);
+        setLiveStatus(liveRes.status || []);
         setEmployees(empsRes.employees || []);
       } else {
         const myLogsRes = await api.timelogs.getMy({ startDate, endDate });
@@ -72,10 +82,6 @@ export default function TimeLogs() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [startDate, endDate, selectedEmpId, statusFilter, isManager]);
 
   const handleManualSubmit = async (e) => {
     e.preventDefault();

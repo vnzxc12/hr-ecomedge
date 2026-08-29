@@ -19,7 +19,7 @@ import {
 } from 'lucide-react';
 
 export default function Assets() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [assets, setAssets] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -59,6 +59,16 @@ export default function Assets() {
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [token, user?.id, authLoading, search, categoryFilter, statusFilter, isManager]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -79,10 +89,6 @@ export default function Assets() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [search, categoryFilter, statusFilter, isManager]);
 
   const handleCreateAsset = async (e) => {
     e.preventDefault();

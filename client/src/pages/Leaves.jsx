@@ -18,7 +18,7 @@ import {
 import confetti from 'canvas-confetti';
 
 export default function Leaves() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [leaves, setLeaves] = useState([]);
   const [employeesList, setEmployeesList] = useState([]);
   const [balance, setBalance] = useState(null);
@@ -50,6 +50,16 @@ export default function Leaves() {
     emergency_days: 0
   });
 
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [token, user?.id, authLoading, isManager, statusFilter]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -74,10 +84,6 @@ export default function Leaves() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [isManager, statusFilter]);
 
   const handleApply = async (e) => {
     e.preventDefault();

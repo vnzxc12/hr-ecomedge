@@ -4,10 +4,12 @@ import { api } from '../services/api';
 import { FileCheck, Plus, CheckCircle2, XCircle, Clock, Search, Calendar, FolderKanban, Trash2, Loader2 } from 'lucide-react';
 
 export default function Timesheets() {
-  const { user, isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [timesheets, setTimesheets] = useState([]);
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [filterStatus, setFilterStatus] = useState('all');
 
@@ -23,12 +25,31 @@ export default function Timesheets() {
     task_description: ''
   });
 
+  // Guard query execution until auth is fully resolved
   useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     loadData();
-  }, [filterStatus]);
+  }, [token, user?.id, authLoading, filterStatus]);
+
+  // Global cache invalidation subscriber
+  useEffect(() => {
+    const handleInvalidate = () => {
+      if (token && !authLoading) {
+        loadData();
+      }
+    };
+    window.addEventListener('timesheets:invalidate', handleInvalidate);
+    return () => window.removeEventListener('timesheets:invalidate', handleInvalidate);
+  }, [token, authLoading]);
 
   const loadData = async () => {
     setLoading(true);
+    setIsError(false);
+    setErrorMessage('');
     try {
       const params = filterStatus !== 'all' ? { status: filterStatus } : {};
       const [tsRes, prjRes] = await Promise.all([
@@ -38,6 +59,8 @@ export default function Timesheets() {
       setTimesheets(tsRes.timesheets || []);
       setProjects(prjRes.projects || []);
     } catch (err) {
+      setIsError(true);
+      setErrorMessage(err.message || 'Failed to retrieve timesheets.');
       showToast(err.message, 'danger');
     } finally {
       setLoading(false);

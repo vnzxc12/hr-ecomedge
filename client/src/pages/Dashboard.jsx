@@ -28,7 +28,7 @@ import {
 import PunchClockModal from '../components/TimeClock/PunchClockModal';
 
 export default function Dashboard({ onNavigate }) {
-  const { user, isManager, todayPunch, punchAction, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, todayPunch, punchAction, showToast } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [showPunchModal, setShowPunchModal] = useState(false);
@@ -38,6 +38,16 @@ export default function Dashboard({ onNavigate }) {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadDashboard();
+  }, [token, user?.id, authLoading, todayPunch]);
 
   const loadDashboard = async () => {
     setLoading(true);
@@ -50,10 +60,6 @@ export default function Dashboard({ onNavigate }) {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadDashboard();
-  }, [todayPunch]);
 
   const handleQuickPunch = async (action) => {
     try {

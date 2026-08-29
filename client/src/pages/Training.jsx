@@ -16,7 +16,7 @@ import {
 import confetti from 'canvas-confetti';
 
 export default function Training() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [programs, setPrograms] = useState([]);
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -53,6 +53,16 @@ export default function Training() {
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadData();
+  }, [token, user?.id, authLoading, isManager]);
+
   const loadData = async () => {
     setLoading(true);
     try {
@@ -73,10 +83,6 @@ export default function Training() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadData();
-  }, [isManager]);
 
   const handleCreateProgram = async (e) => {
     e.preventDefault();

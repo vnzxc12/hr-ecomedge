@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 
 export default function Documents() {
-  const { isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [documents, setDocuments] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,25 +38,36 @@ export default function Documents() {
     { id: '', label: 'All Files' },
     { id: 'resume_cv', label: 'CV / Resumes' },
     { id: 'government_id', label: 'Government IDs & Passports' },
-    { id: 'contract', label: 'Employment Contracts & NDAs' },
-    { id: 'certificate', label: 'Certifications & Diplomas' },
-    { id: 'performance_review', label: 'Performance Appraisals' },
-    { id: 'other', label: 'Other Documents' },
+    { id: 'contract_nda', label: 'Contracts & Non-Disclosures' },
+    { id: 'performance_review', label: 'Performance Evaluations' },
+    { id: 'company_policy', label: 'Company Handbook & Policies' },
+    { id: 'certificate', label: 'Training Certificates' },
+    { id: 'other', label: 'Miscellaneous' }
   ];
+
+  // Guard query execution until auth is fully resolved
+  useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
+    loadDocs();
+  }, [token, user?.id, authLoading, categoryFilter, selectedEmpId, search, isManager]);
 
   const loadDocs = async () => {
     setLoading(true);
     try {
       if (isManager) {
-        const [docsRes, empsRes] = await Promise.all([
+        const [docRes, empRes] = await Promise.all([
           api.documents.getAll({ category: categoryFilter, employee_id: selectedEmpId, search }),
           api.employees.getAll()
         ]);
-        setDocuments(docsRes.documents || []);
-        setEmployees(empsRes.employees || []);
+        setDocuments(docRes.documents || []);
+        setEmployees(empRes.employees || []);
       } else {
-        const res = await api.documents.getMy();
-        let filtered = res.documents || [];
+        const docRes = await api.documents.getMy();
+        let filtered = docRes.documents || [];
         if (categoryFilter) filtered = filtered.filter(d => d.category === categoryFilter);
         setDocuments(filtered);
       }
@@ -66,10 +77,6 @@ export default function Documents() {
       setLoading(false);
     }
   };
-
-  useEffect(() => {
-    loadDocs();
-  }, [categoryFilter, selectedEmpId, search, isManager]);
 
   const handleUpload = async (e) => {
     e.preventDefault();
