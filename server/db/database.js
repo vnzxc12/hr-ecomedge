@@ -362,7 +362,7 @@ function initSchema() {
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
 
-    -- 20. Audit Logs Table
+    -- 20. Legacy Audit Logs Table (backward compatibility)
     CREATE TABLE IF NOT EXISTS audit_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       user_id INTEGER,
@@ -373,6 +373,72 @@ function initSchema() {
       details TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
+
+    -- 21. System Audit Trail (Enterprise State Changes: CRUD, Payroll, RBAC)
+    CREATE TABLE IF NOT EXISTS system_audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT,
+      action TEXT NOT NULL,
+      resource_type TEXT NOT NULL,
+      resource_id TEXT NOT NULL,
+      ip_address TEXT,
+      user_agent TEXT,
+      device_fingerprint TEXT,
+      before_state TEXT,
+      after_state TEXT,
+      diff TEXT,
+      status TEXT DEFAULT 'SUCCESS',
+      error_message TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    -- 22. Login & Authentication Audit Log
+    CREATE TABLE IF NOT EXISTS auth_audit_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT NOT NULL,
+      event_type TEXT NOT NULL,
+      status TEXT NOT NULL,
+      failure_reason TEXT,
+      ip_address TEXT NOT NULL,
+      user_agent TEXT,
+      device_fingerprint TEXT,
+      session_id TEXT,
+      metadata TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    );
+
+    -- 23. Active User Sessions Table
+    CREATE TABLE IF NOT EXISTS user_sessions (
+      id TEXT PRIMARY KEY,
+      user_id INTEGER NOT NULL,
+      device_fingerprint TEXT,
+      ip_address TEXT,
+      user_agent TEXT,
+      last_active_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      expires_at DATETIME NOT NULL,
+      is_revoked INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    -- High-Performance Indexes for Audit & Session Queries
+    CREATE INDEX IF NOT EXISTS idx_sys_audit_cursor ON system_audit_logs (created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_sys_audit_resource ON system_audit_logs (resource_type, resource_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_sys_audit_user ON system_audit_logs (user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_sys_audit_action ON system_audit_logs (action, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_auth_audit_cursor ON auth_audit_logs (created_at DESC, id DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_audit_user ON auth_audit_logs (user_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_audit_username ON auth_audit_logs (username, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_audit_ip ON auth_audit_logs (ip_address, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_auth_audit_event ON auth_audit_logs (event_type, status, created_at DESC);
+
+    CREATE INDEX IF NOT EXISTS idx_sessions_user_active ON user_sessions (user_id, is_revoked, expires_at);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON user_sessions (expires_at);
   `);
 
   // Safe schema migrations

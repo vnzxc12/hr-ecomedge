@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { db } = require('../db/database');
 const { authenticate, requireManager } = require('../middleware/auth');
+const { recordAudit } = require('../middleware/auditMiddleware');
 
 // POST /api/payroll/generate (Manager runs automated payroll computation)
 router.post('/generate', authenticate, requireManager, (req, res) => {
@@ -124,6 +125,21 @@ router.post('/generate', authenticate, requireManager, (req, res) => {
       WHERE p.payroll_id = ?
     `).all(createdPayrollId);
 
+    // Record audit snapshot for payroll generation
+    recordAudit({
+      req,
+      action: 'PAYROLL_GENERATE',
+      resourceType: 'payroll',
+      resourceId: createdPayrollId,
+      beforeState: null,
+      afterState: {
+        payroll,
+        employee_count: employees.length,
+        total_gross: totalGrossSum,
+        total_net: totalNetSum
+      }
+    });
+
     res.status(201).json({
       message: `Payroll run "${payrollCode}" generated successfully for ${employees.length} employees.`,
       payroll,
@@ -195,6 +211,8 @@ router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
 
     const today = new Date().toISOString().split('T')[0];
 
+    const beforePayroll = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(runId);
+
     db.transaction(() => {
       db.prepare(`
         UPDATE payrolls
@@ -208,6 +226,16 @@ router.put('/runs/:id/status', authenticate, requireManager, (req, res) => {
     })();
 
     const updated = db.prepare('SELECT * FROM payrolls WHERE id = ?').get(runId);
+
+    recordAudit({
+      req,
+      action: 'PAYROLL_STATUS_CHANGE',
+      resourceType: 'payroll',
+      resourceId: runId,
+      beforeState: beforePayroll,
+      afterState: updated
+    });
+
     res.json({ message: `Payroll status updated to "${status}".`, run: updated });
   } catch (err) {
     console.error('Update payroll status error:', err);

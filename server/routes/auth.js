@@ -4,14 +4,29 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { db } = require('../db/database');
 const { authenticate, requireManager, JWT_SECRET } = require('../middleware/auth');
+const auditService = require('../services/auditService');
+const sessionService = require('../services/sessionService');
+const cacheService = require('../services/cacheService');
 
 // POST /api/auth/login
-// Strictly Username & Password based (no email required)
+// Strictly Username & Password based with Enterprise Non-Blocking Auth Tracking & Session Creation
 router.post('/login', async (req, res) => {
-  try {
-    const { username, password } = req.body;
+  const ipAddress = sessionService.extractIp(req);
+  const userAgent = req.headers['user-agent'] || 'Unknown';
+  const deviceFingerprint = sessionService.generateDeviceFingerprint(req);
+  const { username, password } = req.body;
 
+  try {
     if (!username || !password) {
+      auditService.logAuthEvent({
+        username: username || 'empty',
+        eventType: 'LOGIN_ATTEMPT',
+        status: 'FAILED',
+        failureReason: 'MISSING_CREDENTIALS',
+        ipAddress,
+        userAgent,
+        deviceFingerprint
+      });
       return res.status(400).json({ error: 'Please provide both username and password.' });
     }
 
@@ -74,10 +89,29 @@ router.post('/login', async (req, res) => {
     }
 
     if (!user) {
+      auditService.logAuthEvent({
+        username: trimmedUsername,
+        eventType: 'LOGIN_FAILURE',
+        status: 'FAILED',
+        failureReason: 'USER_NOT_FOUND',
+        ipAddress,
+        userAgent,
+        deviceFingerprint
+      });
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
     if (user.employment_status && user.employment_status === 'terminated') {
+      auditService.logAuthEvent({
+        userId: user.id,
+        username: user.username,
+        eventType: 'LOGIN_FAILURE',
+        status: 'BLOCKED',
+        failureReason: 'ACCOUNT_TERMINATED',
+        ipAddress,
+        userAgent,
+        deviceFingerprint
+      });
       return res.status(403).json({ error: 'This account has been deactivated. Contact your HR administrator.' });
     }
 
@@ -101,20 +135,50 @@ router.post('/login', async (req, res) => {
     }
 
     if (!isMatch) {
+      auditService.logAuthEvent({
+        userId: user.id,
+        username: user.username,
+        eventType: 'LOGIN_FAILURE',
+        status: 'FAILED',
+        failureReason: 'INVALID_CREDENTIALS',
+        ipAddress,
+        userAgent,
+        deviceFingerprint
+      });
       return res.status(401).json({ error: 'Invalid username or password.' });
     }
 
-    // Sign JWT token valid for 7 days
+    // 3. Create active session in database
+    const session = sessionService.createSession(user.id, req);
+
+    // 4. Sign JWT token
     const token = jwt.sign(
       {
         id: user.id,
         username: user.username,
         role: user.role,
-        employee_id: user.employee_id
+        employee_id: user.employee_id,
+        session_id: session.sessionId
       },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
+
+    // 5. Asynchronously log successful auth event
+    auditService.logAuthEvent({
+      userId: user.id,
+      username: user.username,
+      eventType: 'LOGIN_SUCCESS',
+      status: 'SUCCESS',
+      sessionId: session.sessionId,
+      ipAddress,
+      userAgent,
+      deviceFingerprint,
+      metadata: {
+        role: user.role,
+        employee_id: user.employee_id
+      }
+    });
 
     const safeUser = {
       id: user.id,
@@ -132,11 +196,38 @@ router.post('/login', async (req, res) => {
     res.json({
       message: 'Login successful',
       token,
+      sessionId: session.sessionId,
       user: safeUser
     });
   } catch (err) {
     console.error('Login error:', err);
     res.status(500).json({ error: 'Internal server error during login.' });
+  }
+});
+
+// POST /api/auth/logout
+router.post('/logout', authenticate, (req, res) => {
+  try {
+    const sessionId = req.headers['x-session-id'] || req.user?.session_id;
+    if (sessionId) {
+      sessionService.revokeSession(sessionId);
+    }
+
+    auditService.logAuthEvent({
+      userId: req.user.id,
+      username: req.user.username,
+      eventType: 'LOGOUT',
+      status: 'SUCCESS',
+      sessionId,
+      ipAddress: sessionService.extractIp(req),
+      userAgent: req.headers['user-agent'] || 'Unknown',
+      deviceFingerprint: sessionService.generateDeviceFingerprint(req)
+    });
+
+    res.json({ message: 'Successfully logged out.' });
+  } catch (err) {
+    console.error('Logout error:', err);
+    res.status(500).json({ error: 'Failed to logout cleanly.' });
   }
 });
 
@@ -162,13 +253,37 @@ router.post('/change-password', authenticate, (req, res) => {
     const isMatch = bcrypt.compareSync(currentPassword, user.password_hash);
 
     if (!isMatch) {
+      auditService.logAuthEvent({
+        userId: req.user.id,
+        username: req.user.username,
+        eventType: 'PASSWORD_CHANGE',
+        status: 'FAILED',
+        failureReason: 'INVALID_CURRENT_PASSWORD',
+        ipAddress: sessionService.extractIp(req),
+        userAgent: req.headers['user-agent'] || 'Unknown',
+        deviceFingerprint: sessionService.generateDeviceFingerprint(req)
+      });
       return res.status(400).json({ error: 'Current password does not match.' });
     }
 
     const newHash = bcrypt.hashSync(newPassword, 10);
     db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newHash, req.user.id);
 
-    res.json({ message: 'Password changed successfully.' });
+    // Revoke all existing sessions to enforce re-login
+    sessionService.revokeAllUserSessions(req.user.id);
+    cacheService.invalidateByTag('rbac');
+
+    auditService.logAuthEvent({
+      userId: req.user.id,
+      username: req.user.username,
+      eventType: 'PASSWORD_CHANGE',
+      status: 'SUCCESS',
+      ipAddress: sessionService.extractIp(req),
+      userAgent: req.headers['user-agent'] || 'Unknown',
+      deviceFingerprint: sessionService.generateDeviceFingerprint(req)
+    });
+
+    res.json({ message: 'Password changed successfully. Please log in again with your new credentials.' });
   } catch (err) {
     console.error('Change password error:', err);
     res.status(500).json({ error: 'Failed to update password.' });
@@ -178,7 +293,7 @@ router.post('/change-password', authenticate, (req, res) => {
 // POST /api/auth/reset-password/:id (Manager only)
 router.post('/reset-password/:id', authenticate, requireManager, (req, res) => {
   try {
-    const userId = req.params.id;
+    const userId = parseInt(req.params.id, 10);
     const { newPassword } = req.body;
 
     if (!newPassword || newPassword.length < 6) {
@@ -192,6 +307,21 @@ router.post('/reset-password/:id', authenticate, requireManager, (req, res) => {
 
     const newHash = bcrypt.hashSync(newPassword, 10);
     db.prepare('UPDATE users SET password_hash = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(newHash, userId);
+
+    // Revoke target user's active sessions
+    sessionService.revokeAllUserSessions(userId);
+    cacheService.invalidateByTag('rbac');
+
+    auditService.logAuthEvent({
+      userId: req.user.id,
+      username: req.user.username,
+      eventType: 'PASSWORD_RESET',
+      status: 'SUCCESS',
+      ipAddress: sessionService.extractIp(req),
+      userAgent: req.headers['user-agent'] || 'Unknown',
+      deviceFingerprint: sessionService.generateDeviceFingerprint(req),
+      metadata: { target_user_id: userId, target_username: targetUser.username }
+    });
 
     res.json({ message: `Password for @${targetUser.username} has been reset successfully.` });
   } catch (err) {
@@ -233,6 +363,9 @@ router.post('/avatar', authenticate, (req, res, next) => {
       db.prepare('UPDATE employees SET avatar_url = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?')
         .run(avatarUrl, req.user.employee_id);
     }
+
+    // Invalidate cached employee directory
+    cacheService.invalidateByTag('employees');
 
     // 2. Update Supabase
     if (supabase) {

@@ -3,6 +3,8 @@ const router = express.Router();
 const bcrypt = require('bcryptjs');
 const { db, pushToSupabase } = require('../db/database');
 const { authenticate, requireManager, requireSelfOrManager } = require('../middleware/auth');
+const { recordAudit } = require('../middleware/auditMiddleware');
+const cacheService = require('../services/cacheService');
 
 // GET /api/employees (List with search and filters)
 router.get('/', authenticate, async (req, res) => {
@@ -428,6 +430,17 @@ router.post('/', authenticate, requireManager, async (req, res) => {
       WHERE e.id = ?
     `).get(createdEmpId);
 
+    // Record audit snapshot and invalidate employee directory cache
+    recordAudit({
+      req,
+      action: 'CREATE',
+      resourceType: 'employee',
+      resourceId: createdEmpId,
+      beforeState: null,
+      afterState: created
+    });
+    cacheService.invalidateByTag('employees');
+
     res.status(201).json({
       message: `Employee ${first_name} ${last_name} created successfully!`,
       employee: created,
@@ -586,6 +599,18 @@ router.put('/:id', authenticate, async (req, res) => {
     // Push update to Supabase
     pushToSupabase('employees', 'update', updated, empId).catch(() => {});
 
+    // Record audit snapshot with before and after state diff
+    recordAudit({
+      req,
+      action: 'UPDATE',
+      resourceType: 'employee',
+      resourceId: empId,
+      beforeState: current,
+      afterState: updated
+    });
+    cacheService.invalidateByTag('employees');
+    cacheService.invalidateByTag('rbac');
+
     res.json({ message: 'Profile updated successfully.', employee: updated });
   } catch (err) {
     console.error('Update employee error:', err);
@@ -597,10 +622,25 @@ router.put('/:id', authenticate, async (req, res) => {
 router.delete('/:id', authenticate, requireManager, (req, res) => {
   try {
     const empId = parseInt(req.params.id, 10);
+    const beforeState = db.prepare('SELECT * FROM employees WHERE id = ?').get(empId);
+
     db.prepare("UPDATE employees SET employment_status = 'terminated', updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(empId);
 
     // Push update to Supabase
     pushToSupabase('employees', 'update', { employment_status: 'terminated' }, empId).catch(() => {});
+
+    if (beforeState) {
+      recordAudit({
+        req,
+        action: 'DELETE',
+        resourceType: 'employee',
+        resourceId: empId,
+        beforeState,
+        afterState: { ...beforeState, employment_status: 'terminated' }
+      });
+    }
+    cacheService.invalidateByTag('employees');
+    cacheService.invalidateByTag('rbac');
 
     res.json({ message: 'Employee status updated to Terminated/Deactivated.' });
   } catch (err) {

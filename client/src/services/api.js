@@ -329,6 +329,18 @@ export const api = {
 
   // Audit Logs
   audit: {
-    getAll: () => request('/audit')
+    getAll: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return request(`/audit${query ? `?${query}` : ''}`);
+    },
+    getSystem: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return request(`/audit/system${query ? `?${query}` : ''}`);
+    },
+    getAuth: (params = {}) => {
+      const query = new URLSearchParams(params).toString();
+      return request(`/audit/auth${query ? `?${query}` : ''}`);
+    },
+    getStats: () => request('/audit/stats')
   }
 };
