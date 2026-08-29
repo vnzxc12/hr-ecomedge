@@ -3,6 +3,11 @@ import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { FolderKanban, Plus, Users, Briefcase, Calendar, CheckCircle2, Search, BarChart2, ArrowUpRight, Clock, ShieldAlert, X, Edit2, Trash2, Loader2, AlertTriangle } from 'lucide-react';
 
+// Pluralization Helper Utility
+const formatPlural = (count, singular, plural = `${singular}s`) => {
+  return `${count} ${count === 1 ? singular : plural}`;
+};
+
 export default function Projects() {
   const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [activeTab, setActiveTab] = useState('projects'); // 'projects', 'clients', 'workload'
@@ -129,11 +134,60 @@ export default function Projects() {
     }
   };
 
+  const handleOpenQuickAssign = (prj) => {
+    setSelectedProject(prj);
+    setAssignForm({
+      project_id: prj.id,
+      employee_id: '',
+      role_on_project: 'Research Analyst',
+      allocation_percent: 100,
+      start_date: '',
+      end_date: ''
+    });
+    setShowAssignModal(true);
+  };
+
   const handleAssignMember = async (e) => {
     e.preventDefault();
+    if (!assignForm.project_id || !assignForm.employee_id) return;
+
+    const assignedEmp = employees.find(emp => emp.id === parseInt(assignForm.employee_id, 10));
+    const targetPrjId = parseInt(assignForm.project_id, 10);
+    const allocPercent = parseInt(assignForm.allocation_percent, 10) || 100;
+
+    // Optimistic UI Update for immediate feedback
+    if (assignedEmp) {
+      setProjects(prevProjects => prevProjects.map(p => {
+        if (p.id === targetPrjId) {
+          const currentMembers = p.assigned_members ? [...p.assigned_members] : [];
+          const existingIdx = currentMembers.findIndex(m => m.employee_id === assignedEmp.id);
+          const newMemberEntry = {
+            project_id: targetPrjId,
+            employee_id: assignedEmp.id,
+            first_name: assignedEmp.first_name,
+            last_name: assignedEmp.last_name,
+            avatar_url: assignedEmp.avatar_url,
+            role_on_project: assignForm.role_on_project || 'Research Analyst',
+            allocation_percent: allocPercent
+          };
+          if (existingIdx >= 0) {
+            currentMembers[existingIdx] = newMemberEntry;
+          } else {
+            currentMembers.push(newMemberEntry);
+          }
+          return {
+            ...p,
+            assigned_members: currentMembers,
+            assigned_count: currentMembers.length
+          };
+        }
+        return p;
+      }));
+    }
+
     try {
       await api.projects.assign(assignForm);
-      showToast('Employee assigned to project successfully!', 'success');
+      showToast(`${assignedEmp ? `${assignedEmp.first_name} ${assignedEmp.last_name}` : 'Employee'} assigned to project!`, 'success');
       setShowAssignModal(false);
       setAssignForm({
         project_id: '',
@@ -147,6 +201,7 @@ export default function Projects() {
       window.dispatchEvent(new CustomEvent('projects:invalidate'));
     } catch (err) {
       showToast(err.message, 'danger');
+      loadData(); // Revert optimistic state on error
     }
   };
 
@@ -192,7 +247,7 @@ export default function Projects() {
             <FolderKanban size={26} color="var(--brand-green)" /> E-Commerce Clients &amp; Projects
           </h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.88rem', marginTop: '0.2rem' }}>
-            Track client research intelligence projects, work assignments, and agency team workload.
+            Track client research intelligence projects, staff allocations, and cross-squad capacity.
           </p>
         </div>
         <div style={{ display: 'flex', gap: '0.6rem' }}>
@@ -289,82 +344,143 @@ export default function Projects() {
           </div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
-            {projects.map(prj => (
-              <div key={prj.id} className="glass-card project-card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
-                  <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
-                    {prj.client_name || 'Client Account'}
-                  </span>
-                  <span className={`badge ${prj.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
-                    {prj.status}
-                  </span>
-                </div>
+            {projects.map(prj => {
+              const members = prj.assigned_members || [];
+              return (
+                <div key={prj.id} className="glass-card project-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
+                      <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
+                        {prj.client_name || 'Client Account'}
+                      </span>
+                      <span className={`badge ${prj.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ fontSize: '0.72rem' }}>
+                        {prj.status}
+                      </span>
+                    </div>
 
-                <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
-                  {prj.name}
-                </h3>
-                <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--brand-green)', marginBottom: '0.6rem' }}>
-                  CODE: {prj.project_code} • {prj.team_name || 'Research Team'}
-                </div>
-                <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', minHeight: '36px', lineHeight: '1.4' }}>
-                  {prj.description || 'Deliverable-driven marketplace analytics and research scope.'}
-                </p>
+                    <h3 style={{ fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '0.35rem' }}>
+                      {prj.name}
+                    </h3>
+                    <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--brand-green)', marginBottom: '0.6rem' }}>
+                      CODE: {prj.project_code} • {prj.team_name || 'Research Team'}
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '1.25rem', minHeight: '36px', lineHeight: '1.4' }}>
+                      {prj.description || 'Deliverable-driven marketplace analytics and research scope.'}
+                    </p>
+                  </div>
 
-                <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                    Manager: <strong style={{ color: 'var(--text-primary)' }}>{prj.pm_first_name ? `${prj.pm_first_name} ${prj.pm_last_name}` : 'Unassigned'}</strong>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--brand-green)' }}>
-                      {prj.assigned_count || 0} Assigned
-                    </span>
-                    {isManager && (
-                      <button
-                        className="btn btn-secondary btn-sm"
-                        onClick={() => {
-                          setAssignForm({ ...assignForm, project_id: prj.id });
-                          setShowAssignModal(true);
-                        }}
-                        title="Assign Staff"
-                      >
-                        <Plus size={13} /> Assign
-                      </button>
-                    )}
+                  <div>
+                    <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '0.85rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      {/* Overlapping Avatar Stack */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        {members.length > 0 ? (
+                          <div style={{ display: 'flex', alignItems: 'center' }}>
+                            <div style={{ display: 'flex', alignItems: 'center' }}>
+                              {members.slice(0, 3).map((m, idx) => (
+                                <div
+                                  key={m.employee_id || idx}
+                                  className="user-avatar"
+                                  title={`${m.first_name} ${m.last_name} (${m.role_on_project || 'Analyst'} • ${m.allocation_percent}%)`}
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    fontSize: '0.7rem',
+                                    marginLeft: idx > 0 ? '-8px' : '0',
+                                    border: '2px solid var(--bg-card)',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.15)',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  {m.avatar_url ? (
+                                    <img src={m.avatar_url} alt={m.first_name} />
+                                  ) : (
+                                    m.first_name ? m.first_name[0] : 'U'
+                                  )}
+                                </div>
+                              ))}
+                              {members.length > 3 && (
+                                <div
+                                  className="user-avatar"
+                                  title={`${members.length - 3} more assigned members`}
+                                  style={{
+                                    width: '28px',
+                                    height: '28px',
+                                    fontSize: '0.65rem',
+                                    marginLeft: '-8px',
+                                    background: 'var(--bg-tertiary)',
+                                    color: 'var(--text-secondary)',
+                                    fontWeight: 800,
+                                    border: '2px solid var(--bg-card)',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.15)'
+                                  }}
+                                >
+                                  +{members.length - 3}
+                                </div>
+                              )}
+                            </div>
+                            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--brand-green)', marginLeft: '0.45rem' }}>
+                              {formatPlural(members.length, 'Member')}
+                            </span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                            Unassigned
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Quick Assign Button */}
+                      {isManager && (
+                        <button
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleOpenQuickAssign(prj)}
+                          title="Assign Staff to Project"
+                          style={{ padding: '0.35rem 0.65rem', fontSize: '0.78rem' }}
+                        >
+                          <Plus size={13} /> Assign
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )
       ) : activeTab === 'workload' ? (
         /* TEAM WORKLOAD VIEW */
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-          {/* Team Aggregates */}
+          {/* Team Allocation Summary */}
           <div className="glass-card">
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <BarChart2 size={18} color="var(--brand-green)" /> Team Allocation Summary
-            </h3>
+            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <BarChart2 size={18} color="var(--brand-green)" /> Team Allocation Summary
+              </h3>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Average utilization formula: Σ(Staff Utilization) / Total Squad Staff
+              </span>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem' }}>
               {workloadData.teams.map(t => (
-                <div key={t.id} style={{ background: 'var(--bg-tertiary)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
+                <div key={t.id} style={{ background: 'var(--bg-tertiary)', padding: '1.1rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.5rem' }}>
-                    <strong style={{ fontSize: '1rem' }}>{t.name}</strong>
+                    <strong style={{ fontSize: '1.05rem', color: 'var(--text-primary)' }}>{t.name}</strong>
                     <span className="badge badge-success" style={{ fontSize: '0.7rem' }}>{t.department}</span>
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.35rem', marginTop: '0.75rem' }}>
+                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.75rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Active Squad Staff:</span>
-                      <strong>{t.total_employees} Staff</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{formatPlural(t.total_employees, 'Staff Member')}</strong>
                     </div>
                     <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                       <span>Active Projects:</span>
-                      <strong>{t.active_projects} Projects</strong>
+                      <strong style={{ color: 'var(--text-primary)' }}>{formatPlural(t.active_projects, 'Active Project')}</strong>
                     </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '0.45rem', marginTop: '0.2rem' }}>
                       <span>Average Utilization:</span>
-                      <strong style={{ color: t.avg_allocation > 100 ? 'var(--danger)' : 'var(--brand-green)' }}>
-                        {Math.round(t.avg_allocation)}%
-                      </strong>
+                      <span className={`badge ${t.avg_allocation > 100 ? 'badge-danger' : t.avg_allocation >= 75 ? 'badge-success' : 'badge-neutral'}`} style={{ fontWeight: 800 }}>
+                        {t.avg_allocation.toFixed(1)}%
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -408,7 +524,7 @@ export default function Projects() {
                       <td>{emp.team_name || 'General'}</td>
                       <td>{emp.job_title}</td>
                       <td>
-                        <span className="badge badge-success">{emp.assigned_projects_count} Projects</span>
+                        <span className="badge badge-success">{formatPlural(emp.assigned_projects_count, 'Project')}</span>
                       </td>
                       <td>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
@@ -468,7 +584,7 @@ export default function Projects() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.6rem' }}>
                     <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>{client.code}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{client.project_count || 0} Projects</span>
+                      <span className="badge badge-neutral" style={{ fontSize: '0.72rem' }}>{formatPlural(client.project_count || 0, 'Project')}</span>
                       {isManager && (
                         <button
                           className="btn-icon"
@@ -621,13 +737,37 @@ export default function Projects() {
         <div className="modal-backdrop">
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
             <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontWeight: 800 }}>Assign Employee to Project</h3>
+              <div>
+                <h3 style={{ margin: 0, fontWeight: 800 }}>Assign Employee to Project</h3>
+                {selectedProject && (
+                  <div style={{ fontSize: '0.8rem', color: 'var(--brand-green)', fontWeight: 700, marginTop: '0.2rem' }}>
+                    Target: {selectedProject.name} ({selectedProject.project_code})
+                  </div>
+                )}
+              </div>
               <button type="button" className="btn-icon" onClick={() => setShowAssignModal(false)} title="Close">
                 <X size={18} />
               </button>
             </div>
             <form onSubmit={handleAssignMember}>
               <div className="modal-body" style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                {!selectedProject && (
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label">Project *</label>
+                    <select
+                      className="form-control"
+                      value={assignForm.project_id}
+                      onChange={(e) => setAssignForm({ ...assignForm, project_id: e.target.value })}
+                      required
+                    >
+                      <option value="">-- Select Project --</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name} ({p.project_code})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="form-group" style={{ margin: 0 }}>
                   <label className="form-label">Employee *</label>
                   <select
@@ -722,7 +862,7 @@ export default function Projects() {
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="e.g. Amazon US & Shopify DTC Brands"
+                    placeholder="e.g. Amazon US &amp; Shopify DTC Brands"
                     value={clientForm.industry}
                     onChange={(e) => setClientForm({ ...clientForm, industry: e.target.value })}
                   />

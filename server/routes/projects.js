@@ -14,14 +14,33 @@ router.get('/', authenticate, async (req, res) => {
       SELECT p.*, 
              c.name as client_name, c.code as client_code,
              t.name as team_name,
-             pm.first_name as pm_first_name, pm.last_name as pm_last_name,
-             (SELECT COUNT(*) FROM project_assignments pa WHERE pa.project_id = p.id AND pa.status = 'active') as assigned_count
+             pm.first_name as pm_first_name, pm.last_name as pm_last_name
       FROM projects p
       LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN teams t ON p.team_id = t.id
       LEFT JOIN employees pm ON p.project_manager_id = pm.id
       ORDER BY p.status ASC, p.created_at DESC
     `).all();
+
+    const allAssignments = db.prepare(`
+      SELECT pa.project_id, pa.employee_id, pa.role_on_project, pa.allocation_percent,
+             e.first_name, e.last_name, e.avatar_url, e.employee_code, e.job_title
+      FROM project_assignments pa
+      JOIN employees e ON pa.employee_id = e.id
+      WHERE pa.status = 'active'
+      ORDER BY pa.allocation_percent DESC
+    `).all();
+
+    const assignMap = {};
+    for (const a of allAssignments) {
+      if (!assignMap[a.project_id]) assignMap[a.project_id] = [];
+      assignMap[a.project_id].push(a);
+    }
+
+    for (const p of projects) {
+      p.assigned_members = assignMap[p.id] || [];
+      p.assigned_count = p.assigned_members.length;
+    }
 
     res.json({ projects });
   } catch (err) {
@@ -267,30 +286,62 @@ router.get('/workload/overview', authenticate, async (req, res) => {
       await syncFromSupabase().catch(() => {});
     }
 
-    const teams = db.prepare(`
-      SELECT t.id, t.name, t.department,
-             COUNT(DISTINCT e.id) as total_employees,
-             COUNT(DISTINCT pa.project_id) as active_projects,
-             COALESCE(AVG(pa.allocation_percent), 0) as avg_allocation
-      FROM teams t
-      LEFT JOIN employees e ON e.team_id = t.id AND e.employment_status = 'active'
-      LEFT JOIN project_assignments pa ON pa.employee_id = e.id AND pa.status = 'active'
-      GROUP BY t.id
-      ORDER BY t.name ASC
-    `).all();
+    // 1. Fetch all active teams
+    const allTeams = db.prepare('SELECT id, name, department FROM teams ORDER BY name ASC').all();
 
+    // 2. Fetch all active employees with their individual total allocations
     const employeeWorkloads = db.prepare(`
-      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.avatar_url,
-             t.name as team_name,
+      SELECT e.id, e.employee_code, e.first_name, e.last_name, e.job_title, e.avatar_url, e.team_id,
+             COALESCE(t.name, 'General') as team_name,
              COALESCE(SUM(pa.allocation_percent), 0) as total_allocation,
-             COUNT(pa.project_id) as assigned_projects_count
+             COUNT(DISTINCT pa.project_id) as assigned_projects_count
       FROM employees e
       LEFT JOIN teams t ON e.team_id = t.id
       LEFT JOIN project_assignments pa ON pa.employee_id = e.id AND pa.status = 'active'
       WHERE e.employment_status = 'active'
       GROUP BY e.id
-      ORDER BY total_allocation DESC
+      ORDER BY total_allocation DESC, e.first_name ASC
     `).all();
+
+    // 3. Count active projects per team (projects assigned to the team or staffed by members of the team)
+    const teamProjectCounts = db.prepare(`
+      SELECT t.id as team_id,
+             COUNT(DISTINCT p.id) as active_projects
+      FROM teams t
+      LEFT JOIN projects p ON (
+        p.team_id = t.id OR p.id IN (
+          SELECT pa2.project_id 
+          FROM project_assignments pa2
+          JOIN employees e2 ON pa2.employee_id = e2.id
+          WHERE e2.team_id = t.id AND pa2.status = 'active'
+        )
+      ) AND p.status = 'active'
+      GROUP BY t.id
+    `).all();
+
+    const projCountMap = {};
+    for (const tp of teamProjectCounts) {
+      projCountMap[tp.team_id] = tp.active_projects || 0;
+    }
+
+    // 4. Calculate utilization and staff count strictly by members belonging to that team
+    // Formula: SUM(utilization) / COUNT(staff)
+    const teams = allTeams.map(team => {
+      const teamMembers = employeeWorkloads.filter(e => e.team_id === team.id);
+      const totalEmployees = teamMembers.length;
+      const totalAllocSum = teamMembers.reduce((sum, m) => sum + (parseFloat(m.total_allocation) || 0), 0);
+      const avgAllocation = totalEmployees > 0 ? Math.round((totalAllocSum / totalEmployees) * 10) / 10 : 0;
+
+      return {
+        id: team.id,
+        name: team.name,
+        department: team.department,
+        total_employees: totalEmployees,
+        active_projects: projCountMap[team.id] || 0,
+        total_allocation_sum: totalAllocSum,
+        avg_allocation: avgAllocation
+      };
+    });
 
     res.json({ teams, employeeWorkloads });
   } catch (err) {
