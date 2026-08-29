@@ -36,11 +36,13 @@ import {
 } from 'lucide-react';
 
 export default function Employees() {
-  const { user, isManager, showToast } = useAuth();
+  const { user, token, loading: authLoading, isManager, showToast } = useAuth();
   const [employees, setEmployees] = useState([]);
   const [teams, setTeams] = useState([]);
   const [designations, setDesignations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Loading States for Actions
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -123,13 +125,21 @@ export default function Employees() {
     file: null
   });
 
+  // Guard query execution until auth is fully resolved
   useEffect(() => {
+    if (authLoading) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     loadEmployees();
     loadMeta();
-  }, [teamFilter, deptFilter, statusFilter]);
+  }, [token, user?.id, authLoading, teamFilter, deptFilter, statusFilter]);
 
   const loadEmployees = async () => {
     setLoading(true);
+    setIsError(false);
+    setErrorMessage('');
     try {
       const params = {};
       if (search) params.search = search;
@@ -140,6 +150,8 @@ export default function Employees() {
       const res = await api.employees.getAll(params);
       setEmployees(res.employees || []);
     } catch (err) {
+      setIsError(true);
+      setErrorMessage(err.message || 'Failed to retrieve workforce directory.');
       showToast(err.message, 'danger');
     } finally {
       setLoading(false);
@@ -1172,15 +1184,62 @@ export default function Employees() {
           <option value="all">All Statuses</option>
           <option value="terminated">Terminated</option>
         </select>
+
+        <button
+          className="btn btn-secondary"
+          onClick={() => loadEmployees()}
+          title="Refresh Directory"
+        >
+          <Loader2 size={14} className={loading ? "animate-spin" : ""} /> Refresh
+        </button>
       </div>
 
       {/* Employees Directory Table */}
       <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
-        {loading ? (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading employee directory...</div>
+        {(loading || authLoading) ? (
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: 'var(--text-secondary)' }}>
+            <Loader2 className="animate-spin" size={32} color="var(--brand-green)" style={{ margin: '0 auto 0.85rem' }} />
+            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Hydrating Employee Directory...</div>
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Synchronizing real-time workforce dossiers from EcomEdge Cloud</div>
+          </div>
+        ) : isError ? (
+          <div style={{ padding: '3.5rem 1.5rem', textAlign: 'center' }}>
+            <AlertTriangle size={36} color="var(--danger)" style={{ margin: '0 auto 0.75rem' }} />
+            <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--text-primary)' }}>Unable to Load Employee Directory</div>
+            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.35rem', maxWidth: '420px', margin: '0.35rem auto 1rem' }}>
+              {errorMessage || 'A network error occurred while retrieving records.'}
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => loadEmployees()}>
+              Retry Connection
+            </button>
+          </div>
         ) : employees.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '3rem 1.5rem', color: 'var(--text-muted)' }}>
-            No employee records found matching your filters.
+          <div style={{ textAlign: 'center', padding: '3.5rem 1.5rem', color: 'var(--text-muted)' }}>
+            <Users size={38} color="var(--text-muted)" style={{ margin: '0 auto 0.85rem', opacity: 0.6 }} />
+            <div style={{ fontWeight: 700, fontSize: '1.05rem', color: 'var(--text-primary)' }}>No employee records found</div>
+            <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '0.3rem', maxWidth: '440px', margin: '0.3rem auto 1.25rem' }}>
+              {search || teamFilter || deptFilter || statusFilter !== 'active'
+                ? 'No employee profiles matched the selected search query or department filters.'
+                : 'The workforce directory is currently empty. Click below to add an employee or refresh the directory.'}
+            </p>
+            <div style={{ display: 'inline-flex', gap: '0.6rem', flexWrap: 'wrap', justifyContent: 'center' }}>
+              {(search || teamFilter || deptFilter || statusFilter !== 'active') && (
+                <button
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => { setSearch(''); setTeamFilter(''); setDeptFilter(''); setStatusFilter('active'); }}
+                >
+                  Clear Filters
+                </button>
+              )}
+              <button className="btn btn-secondary btn-sm" onClick={() => loadEmployees()}>
+                Refresh
+              </button>
+              {isManager && (
+                <button className="btn btn-primary btn-sm" onClick={() => setShowAddModal(true)}>
+                  <Plus size={14} /> Add Employee
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>

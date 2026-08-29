@@ -527,36 +527,45 @@ function seedIfEmpty() {
   }
 }
 
-// Real-time synchronization from Supabase
+// Real-time synchronization from Supabase with Single-Flight In-Flight Mutex
 let lastSyncTime = 0;
+let activeSyncPromise = null;
+
 async function syncFromSupabase(force = false) {
   if (!supabase) return;
-  const now = Date.now();
-  if (!force && now - lastSyncTime < 2000) {
-    return; // throttle to once every 2s
+
+  // If a synchronization is already actively in progress, await it
+  if (activeSyncPromise) {
+    return activeSyncPromise;
   }
-  lastSyncTime = now;
 
-  try {
-    const [
-      { data: employees, error: empErr },
-      { data: users, error: userErr },
-      { data: leaves },
-      { data: balances },
-      { data: timeLogs },
-      { data: remoteAudits }
-    ] = await Promise.all([
-      supabase.from('employees').select('*'),
-      supabase.from('users').select('*'),
-      supabase.from('leaves').select('*'),
-      supabase.from('leave_balances').select('*'),
-      supabase.from('time_logs').select('*'),
-      supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200)
-    ]);
+  const now = Date.now();
+  if (!force && now - lastSyncTime < 2500) {
+    return; // throttle if recently completed
+  }
 
-    if (empErr || userErr) {
-      return;
-    }
+  activeSyncPromise = (async () => {
+    try {
+      lastSyncTime = Date.now();
+      const [
+        { data: employees, error: empErr },
+        { data: users, error: userErr },
+        { data: leaves },
+        { data: balances },
+        { data: timeLogs },
+        { data: remoteAudits }
+      ] = await Promise.all([
+        supabase.from('employees').select('*'),
+        supabase.from('users').select('*'),
+        supabase.from('leaves').select('*'),
+        supabase.from('leave_balances').select('*'),
+        supabase.from('time_logs').select('*'),
+        supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200)
+      ]);
+
+      if (empErr || userErr) {
+        return;
+      }
 
     sqlite.transaction(() => {
       if (Array.isArray(employees) && employees.length > 0) {
@@ -650,7 +659,12 @@ async function syncFromSupabase(force = false) {
     })();
   } catch (err) {
     console.warn('Sync from Supabase warning:', err.message);
+  } finally {
+    activeSyncPromise = null;
   }
+  })();
+
+  return activeSyncPromise;
 }
 
 // Push mutations to Supabase
