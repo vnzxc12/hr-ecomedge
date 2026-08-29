@@ -1000,14 +1000,53 @@ export default function Employees() {
 
                   <div className="form-row">
                     <div className="form-group" style={{ margin: 0 }}>
-                      <label className="form-label">Monthly Salary (PHP)</label>
+                      <label className="form-label" style={{ fontWeight: 700 }}>
+                        {editForm.employment_type === 'part_time' ? 'Hourly Rate (PHP/hr) *' : 'Monthly Salary (PHP)'}
+                      </label>
+                      {editForm.employment_type === 'part_time' ? (
+                        <input
+                          type="number"
+                          step="0.25"
+                          min="0"
+                          className="form-control"
+                          placeholder="e.g. 100.00"
+                          value={editForm.hourly_rate || ''}
+                          onChange={(e) => {
+                            const hr = parseFloat(e.target.value) || 0;
+                            setEditForm({ ...editForm, hourly_rate: hr, monthly_salary: hr * 80 });
+                          }}
+                          required
+                        />
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          className="form-control"
+                          placeholder="e.g. 20000"
+                          value={editForm.monthly_salary || ''}
+                          onChange={(e) => {
+                            const sal = parseFloat(e.target.value) || 0;
+                            setEditForm({ ...editForm, monthly_salary: sal, hourly_rate: sal > 0 ? parseFloat((sal / 160).toFixed(2)) : 0 });
+                          }}
+                        />
+                      )}
+                    </div>
+
+                    <div className="form-group" style={{ margin: 0 }}>
+                      <label className="form-label" style={{ fontWeight: 700 }}>
+                        {editForm.employment_type === 'part_time' ? 'Est. Monthly Equivalent (80 hrs)' : 'Effective Hourly Rate (160 hrs)'}
+                      </label>
                       <input
-                        type="number"
+                        type="text"
                         className="form-control"
-                        value={editForm.monthly_salary}
-                        onChange={(e) => setEditForm({ ...editForm, monthly_salary: parseFloat(e.target.value) || 0, hourly_rate: (parseFloat(e.target.value) || 0) / 160 })}
+                        disabled
+                        style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+                        value={editForm.employment_type === 'part_time' ? `₱${(editForm.hourly_rate ? editForm.hourly_rate * 80 : 0).toFixed(2)}` : `₱${(editForm.monthly_salary ? editForm.monthly_salary / 160 : 0).toFixed(2)}/hr`}
                       />
                     </div>
+                  </div>
+
+                  <div className="form-row">
                     <div className="form-group" style={{ margin: 0 }}>
                       <label className="form-label">Hire Date</label>
                       <input
@@ -1458,14 +1497,21 @@ export default function Employees() {
 
                 <div className="form-row">
                   <div className="form-group" style={{ margin: 0 }}>
-                    <label className="form-label">Monthly Salary (PHP) *</label>
-                    <input
-                      type="number"
+                    <label className="form-label">Employment Type *</label>
+                    <select
                       className="form-control"
-                      value={empForm.monthly_salary}
-                      onChange={(e) => setEmpForm({ ...empForm, monthly_salary: parseFloat(e.target.value) || 0, hourly_rate: (parseFloat(e.target.value) || 0) / 160 })}
+                      value={empForm.employment_type || 'full_time'}
+                      onChange={(e) => {
+                        const type = e.target.value;
+                        setEmpForm({ ...empForm, employment_type: type });
+                      }}
                       required
-                    />
+                    >
+                      <option value="full_time">Full-Time (Monthly Salaried)</option>
+                      <option value="part_time">Part-Time (Hourly Rate)</option>
+                      <option value="contract">Contract (Fixed Term / Hourly)</option>
+                      <option value="intern">Intern / Trainee (Hourly / Allowance)</option>
+                    </select>
                   </div>
                   <div className="form-group" style={{ margin: 0 }}>
                     <label className="form-label">Hire Date *</label>
@@ -1475,6 +1521,54 @@ export default function Employees() {
                       value={empForm.hire_date}
                       onChange={(e) => setEmpForm({ ...empForm, hire_date: e.target.value })}
                       required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-row">
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 700 }}>
+                      {empForm.employment_type === 'part_time' ? 'Hourly Rate (PHP/hr) *' : 'Monthly Salary (PHP) *'}
+                    </label>
+                    {empForm.employment_type === 'part_time' ? (
+                      <input
+                        type="number"
+                        step="0.25"
+                        min="0"
+                        className="form-control"
+                        placeholder="e.g. 100.00 / hr"
+                        value={empForm.hourly_rate || ''}
+                        onChange={(e) => {
+                          const hr = parseFloat(e.target.value) || 0;
+                          setEmpForm({ ...empForm, hourly_rate: hr, monthly_salary: hr * 80 });
+                        }}
+                        required
+                      />
+                    ) : (
+                      <input
+                        type="number"
+                        min="0"
+                        className="form-control"
+                        placeholder="e.g. 20000"
+                        value={empForm.monthly_salary || ''}
+                        onChange={(e) => {
+                          const sal = parseFloat(e.target.value) || 0;
+                          setEmpForm({ ...empForm, monthly_salary: sal, hourly_rate: sal > 0 ? parseFloat((sal / 160).toFixed(2)) : 0 });
+                        }}
+                        required
+                      />
+                    )}
+                  </div>
+                  <div className="form-group" style={{ margin: 0 }}>
+                    <label className="form-label" style={{ fontWeight: 700 }}>
+                      {empForm.employment_type === 'part_time' ? 'Est. Monthly Equivalent (80 hrs)' : 'Effective Hourly Rate (160 hrs)'}
+                    </label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      disabled
+                      style={{ background: 'var(--bg-tertiary)', color: 'var(--text-muted)' }}
+                      value={empForm.employment_type === 'part_time' ? `₱${(empForm.hourly_rate ? empForm.hourly_rate * 80 : 0).toFixed(2)}` : `₱${(empForm.monthly_salary ? empForm.monthly_salary / 160 : 0).toFixed(2)}/hr`}
                     />
                   </div>
                 </div>

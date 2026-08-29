@@ -128,11 +128,21 @@ class SessionService {
       return { valid: false, reason: 'SESSION_REVOKED' };
     }
 
-    // Check 20-minute idle inactivity
-    const lastActive = session.last_active_at ? new Date(session.last_active_at).getTime() : now;
+    // Parse last_active_at safely
+    let lastActive = now;
+    if (session.last_active_at) {
+      const parsed = new Date(session.last_active_at).getTime();
+      if (!isNaN(parsed) && parsed > 0) {
+        lastActive = parsed;
+      }
+    }
+
     const idleTime = now - lastActive;
 
     if (idleTime > this.idleTimeoutMs) {
+      try {
+        db.prepare('UPDATE user_sessions SET is_revoked = 1 WHERE id = ?').run(sessionId);
+      } catch (e) {}
       return { valid: false, reason: 'IDLE_TIMEOUT_EXPIRED' };
     }
 

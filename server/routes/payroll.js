@@ -176,19 +176,28 @@ router.post('/generate', authenticate, requireManager, async (req, res) => {
 
         // STRICT ATTENDANCE & NO-WORK NO-PAY RULE:
         if (totalHoursWorked > 0) {
-          if (emp.hourly_rate > 0) {
-            const rate = emp.hourly_rate;
+          const isPartTime = emp.employment_type === 'part_time' || (emp.hourly_rate > 0 && (!emp.monthly_salary || emp.monthly_salary <= 0));
+
+          if (isPartTime || (emp.hourly_rate > 0 && emp.employment_type !== 'full_time')) {
+            // Part-Time / Hourly Compensation: Exact worked hours * hourly_rate
+            const rate = emp.hourly_rate > 0 ? emp.hourly_rate : (emp.monthly_salary > 0 ? emp.monthly_salary / standardHoursBenchmark : 50.00);
             basicPay = totalCreditedRegularHours * rate;
             overtimePay = overtimeHours * (rate * otMultiplier);
             allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
           } else if (emp.monthly_salary > 0) {
+            // Full-Time Salaried: Prorated attendance ratio against 160.0 hours monthly benchmark
             const effectiveHourlyRate = emp.monthly_salary / standardHoursBenchmark;
             const attendanceRatio = Math.min(1.0, totalCreditedRegularHours / standardHoursBenchmark);
             basicPay = attendanceRatio * emp.monthly_salary;
             overtimePay = overtimeHours * (effectiveHourlyRate * otMultiplier);
             allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
+          } else if (emp.hourly_rate > 0) {
+            const rate = emp.hourly_rate;
+            basicPay = totalCreditedRegularHours * rate;
+            overtimePay = overtimeHours * (rate * otMultiplier);
+            allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;
           } else {
-            const fallbackRate = 25.00;
+            const fallbackRate = 50.00;
             basicPay = totalCreditedRegularHours * fallbackRate;
             overtimePay = overtimeHours * (fallbackRate * otMultiplier);
             allowances = Math.min(1.0, totalHoursWorked / standardHoursBenchmark) * standardMonthlyAllowance;

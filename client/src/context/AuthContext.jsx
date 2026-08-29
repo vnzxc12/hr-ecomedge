@@ -29,6 +29,21 @@ export function AuthProvider({ children }) {
     }, 4000);
   };
 
+  // Listen for global auth expiration events from API client
+  useEffect(() => {
+    const handleAuthExpired = (e) => {
+      const msg = e.detail?.message || 'Session expired. Please log in again.';
+      localStorage.removeItem('hr_token');
+      setToken(null);
+      setUser(null);
+      setTodayPunch(null);
+      showToast(msg, 'warning');
+    };
+
+    window.addEventListener('auth:expired', handleAuthExpired);
+    return () => window.removeEventListener('auth:expired', handleAuthExpired);
+  }, []);
+
   // Load user profile on startup
   useEffect(() => {
     async function loadUser() {
@@ -44,12 +59,12 @@ export function AuthProvider({ children }) {
           if (data.user?.employee_id) {
             fetchTodayPunch();
           }
+        } else {
+          logout(false);
         }
       } catch (err) {
         console.warn('Session verification notice:', err.message);
-        if (err.message && (err.message.includes('expired') || err.message.includes('revoked') || err.message.includes('401'))) {
-          logout();
-        }
+        logout(false);
       } finally {
         setLoading(false);
       }
@@ -63,13 +78,13 @@ export function AuthProvider({ children }) {
     if (!token || !user) return;
 
     let idleTimer = null;
-    const IDLE_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes
+    const IDLE_TIMEOUT_MS = 20 * 60 * 1000; // 20 minutes of continuous idle inactivity
 
     const resetIdleTimer = () => {
       if (idleTimer) clearTimeout(idleTimer);
       idleTimer = setTimeout(() => {
+        logout(false);
         showToast('Session expired due to 20 minutes of inactivity. Please log in again.', 'warning');
-        logout();
       }, IDLE_TIMEOUT_MS);
     };
 
@@ -112,12 +127,14 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const logout = () => {
+  const logout = (showMessage = true) => {
     localStorage.removeItem('hr_token');
     setToken(null);
     setUser(null);
     setTodayPunch(null);
-    showToast('Logged out successfully.', 'info');
+    if (showMessage) {
+      showToast('Logged out successfully.', 'info');
+    }
   };
 
   const refreshUser = async () => {

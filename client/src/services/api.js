@@ -29,6 +29,18 @@ async function request(endpoint, options = {}) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
+    if (response.status === 401 || response.status === 403) {
+      const errText = (data.error || data.message || '').toLowerCase();
+      if (
+        errText.includes('expired') ||
+        errText.includes('invalid token') ||
+        errText.includes('authentication required') ||
+        errText.includes('revoked')
+      ) {
+        localStorage.removeItem('hr_token');
+        window.dispatchEvent(new CustomEvent('auth:expired', { detail: { message: data.error || 'Session expired. Please log in again.' } }));
+      }
+    }
     const errorMsg = data.error || data.message || `Request failed with status ${response.status}`;
     throw new Error(errorMsg);
   }
