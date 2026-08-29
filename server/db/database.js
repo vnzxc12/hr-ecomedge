@@ -600,8 +600,34 @@ async function syncFromSupabase(force = false) {
     sqlite.transaction(() => {
       if (Array.isArray(employees) && employees.length > 0) {
         const insertEmp = sqlite.prepare(`
-          INSERT OR REPLACE INTO employees (id, employee_code, first_name, last_name, job_title, department, employment_status, employment_type, hire_date, hourly_rate, monthly_salary, phone, address, emergency_contact_name, emergency_contact_phone, bank_name, bank_account_number, avatar_url)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO employees (
+            id, employee_code, first_name, last_name, job_title, department,
+            employment_status, employment_type, hire_date, hourly_rate, monthly_salary,
+            phone, address, emergency_contact_name, emergency_contact_phone, bank_name,
+            bank_account_number, avatar_url, team_id, designation_id, manager_id
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT(id) DO UPDATE SET
+            employee_code = EXCLUDED.employee_code,
+            first_name = EXCLUDED.first_name,
+            last_name = EXCLUDED.last_name,
+            job_title = EXCLUDED.job_title,
+            department = EXCLUDED.department,
+            employment_status = EXCLUDED.employment_status,
+            employment_type = EXCLUDED.employment_type,
+            hire_date = EXCLUDED.hire_date,
+            hourly_rate = EXCLUDED.hourly_rate,
+            monthly_salary = EXCLUDED.monthly_salary,
+            phone = EXCLUDED.phone,
+            address = EXCLUDED.address,
+            emergency_contact_name = EXCLUDED.emergency_contact_name,
+            emergency_contact_phone = EXCLUDED.emergency_contact_phone,
+            bank_name = EXCLUDED.bank_name,
+            bank_account_number = EXCLUDED.bank_account_number,
+            avatar_url = EXCLUDED.avatar_url,
+            team_id = COALESCE(EXCLUDED.team_id, employees.team_id),
+            designation_id = COALESCE(EXCLUDED.designation_id, employees.designation_id),
+            manager_id = COALESCE(EXCLUDED.manager_id, employees.manager_id)
         `);
         for (const e of employees) {
           insertEmp.run(
@@ -622,7 +648,10 @@ async function syncFromSupabase(force = false) {
             e.emergency_contact_phone || null,
             e.bank_name || null,
             e.bank_account_number || null,
-            e.avatar_url || null
+            e.avatar_url || null,
+            e.team_id || null,
+            e.designation_id || null,
+            e.manager_id || null
           );
         }
       }
