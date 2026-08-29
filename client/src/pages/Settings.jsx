@@ -60,6 +60,8 @@ export default function Settings() {
     }
   };
 
+  const [auditSearch, setAuditSearch] = useState('');
+
   const loadData = async (reset = false) => {
     if (reset) {
       setLoading(true);
@@ -70,23 +72,25 @@ export default function Settings() {
         const res = await api.teams.getDesignations();
         setDesignations(res.designations || []);
       } else if (activeTab === 'system_audit') {
-        const res = await api.audit.getSystem({ limit: 25, cursor: reset ? '' : nextCursor });
+        const res = await api.audit.getSystem({ limit: 25, cursor: reset ? '' : nextCursor, search: auditSearch });
+        const list = res.items || res.logs || [];
         if (reset) {
-          setSystemLogs(res.items || []);
+          setSystemLogs(list);
         } else {
-          setSystemLogs(prev => [...prev, ...(res.items || [])]);
+          setSystemLogs(prev => [...prev, ...list]);
         }
         setNextCursor(res.next_cursor);
-        setHasMore(res.has_more);
+        setHasMore(Boolean(res.has_more));
       } else if (activeTab === 'auth_audit') {
-        const res = await api.audit.getAuth({ limit: 25, cursor: reset ? '' : nextCursor });
+        const res = await api.audit.getAuth({ limit: 25, cursor: reset ? '' : nextCursor, username: auditSearch });
+        const list = res.items || res.logs || [];
         if (reset) {
-          setAuthLogs(res.items || []);
+          setAuthLogs(list);
         } else {
-          setAuthLogs(prev => [...prev, ...(res.items || [])]);
+          setAuthLogs(prev => [...prev, ...list]);
         }
         setNextCursor(res.next_cursor);
-        setHasMore(res.has_more);
+        setHasMore(Boolean(res.has_more));
       }
     } catch (err) {
       showToast(err.message, 'danger');
@@ -278,6 +282,25 @@ export default function Settings() {
       ) : activeTab === 'system_audit' ? (
         /* SYSTEM STATE AUDIT TRAIL */
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, maxWidth: '360px' }}>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Search by user, action, or ID..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') loadData(true); }}
+                style={{ height: '34px', fontSize: '0.82rem' }}
+              />
+              <button className="btn btn-secondary btn-sm" onClick={() => loadData(true)}>
+                Filter
+              </button>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setAuditSearch(''); loadData(true); }}>
+              Refresh Logs
+            </button>
+          </div>
           <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
             <table className="table">
               <thead>
@@ -359,6 +382,25 @@ export default function Settings() {
       ) : (
         /* AUTH & LOGIN AUDITS */
         <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, maxWidth: '360px' }}>
+              <input
+                type="text"
+                className="form-control"
+                placeholder="Search by username..."
+                value={auditSearch}
+                onChange={(e) => setAuditSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') loadData(true); }}
+                style={{ height: '34px', fontSize: '0.82rem' }}
+              />
+              <button className="btn btn-secondary btn-sm" onClick={() => loadData(true)}>
+                Filter
+              </button>
+            </div>
+            <button className="btn btn-secondary btn-sm" onClick={() => { setAuditSearch(''); loadData(true); }}>
+              Refresh Logins
+            </button>
+          </div>
           <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
             <table className="table">
               <thead>

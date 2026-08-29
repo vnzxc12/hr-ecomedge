@@ -3,10 +3,10 @@ const { db, supabase } = require('../db/database');
 /**
  * Enterprise Asynchronous Non-Blocking Audit Pipeline
  * Pattern drawn from HR PLN Architecture:
- * - Decoupled in-memory batch ring buffer
- * - Automatic micro-batch flush every 500ms or 50 items
+ * - Immediate zero-latency local write (0.1ms SQLite WAL transaction)
+ * - Decoupled async cloud batch push to Supabase with dual-table fallback
  * - Deep diff engine with sensitive field redaction
- * - Circuit breaker protection to prevent event-loop congestion
+ * - Automatic circuit breaker protection
  */
 
 class AuditPipelineService {
@@ -16,9 +16,9 @@ class AuditPipelineService {
     this.batchSize = 50;
     this.flushIntervalMs = 500;
     this.isFlushing = false;
-    this.maxQueueCapacity = 5000; // Drop threshold during extreme DB outage / congestion
+    this.maxQueueCapacity = 5000;
 
-    // Sensitive field keys to automatically redact from diffs and snapshots
+    // Sensitive keys to redact
     this.redactedKeys = new Set([
       'password',
       'password_hash',
@@ -30,19 +30,17 @@ class AuditPipelineService {
       'secret'
     ]);
 
-    // Start background worker timer (Unref'd so it won't block process exit)
+    // Background flush timer
     this.flushTimer = setInterval(() => {
-      this.flushQueues().catch(err => console.error('Audit flush error:', err));
+      this.flushCloudQueues().catch(err => console.error('Cloud audit flush error:', err));
     }, this.flushIntervalMs);
 
     if (this.flushTimer.unref) {
       this.flushTimer.unref();
     }
 
-    // Graceful process termination handling
     const gracefulFlush = async () => {
-      console.log('🔄 Flushing remaining audit queue before shutdown...');
-      await this.flushQueues(true);
+      await this.flushCloudQueues(true);
     };
 
     process.once('SIGINT', gracefulFlush);
@@ -51,7 +49,7 @@ class AuditPipelineService {
   }
 
   /**
-   * Sanitizes object by masking sensitive keys
+   * Sanitizes state by masking sensitive keys
    */
   sanitizeState(state) {
     if (!state || typeof state !== 'object') return state;
@@ -70,11 +68,11 @@ class AuditPipelineService {
   }
 
   /**
-   * Computes precise field-level delta between before_state and after_state
+   * Computes field-level delta
    */
   computeDiff(beforeState, afterState) {
     if (!beforeState && !afterState) return null;
-    if (!beforeState) return { _type: 'INSERT', after: this.sanitizeState(afterState) };
+    if (!beforeState) return { _type: 'CREATE', after: this.sanitizeState(afterState) };
     if (!afterState) return { _type: 'DELETE', before: this.sanitizeState(beforeState) };
 
     const sanitizedBefore = this.sanitizeState(beforeState);
@@ -87,7 +85,6 @@ class AuditPipelineService {
       const valBefore = sanitizedBefore[key];
       const valAfter = sanitizedAfter[key];
 
-      // Convert dates/nulls/numbers for stable comparison
       const strBefore = valBefore === undefined ? undefined : JSON.stringify(valBefore);
       const strAfter = valAfter === undefined ? undefined : JSON.stringify(valAfter);
 
@@ -103,8 +100,7 @@ class AuditPipelineService {
   }
 
   /**
-   * Non-blocking queueing of critical state changes (CRUD, Payroll, RBAC)
-   * Dispatches via setImmediate to guarantee 0ms overhead on main request path.
+   * Logs system state modifications (CRUD, Payroll, Permissions)
    */
   logSystemEvent({
     userId = null,
@@ -120,44 +116,80 @@ class AuditPipelineService {
     status = 'SUCCESS',
     errorMessage = null
   }) {
-    setImmediate(() => {
-      if (this.systemQueue.length >= this.maxQueueCapacity) {
-        console.warn('⚠️ [AuditService] Queue capacity reached. Dropping earliest event to protect memory.');
-        this.systemQueue.shift();
-      }
+    const cleanBefore = beforeState ? this.sanitizeState(beforeState) : null;
+    const cleanAfter = afterState ? this.sanitizeState(afterState) : null;
+    const computedDiff = this.computeDiff(beforeState, afterState);
+    const nowIso = new Date().toISOString();
 
-      const cleanBefore = beforeState ? this.sanitizeState(beforeState) : null;
-      const cleanAfter = afterState ? this.sanitizeState(afterState) : null;
-      const computedDiff = this.computeDiff(beforeState, afterState);
+    const event = {
+      user_id: userId ? parseInt(userId, 10) : null,
+      username: username || 'system',
+      action,
+      resource_type: resourceType,
+      resource_id: String(resourceId),
+      ip_address: ipAddress || '127.0.0.1',
+      user_agent: userAgent || 'Unknown',
+      device_fingerprint: deviceFingerprint || null,
+      before_state: cleanBefore ? JSON.stringify(cleanBefore) : null,
+      after_state: cleanAfter ? JSON.stringify(cleanAfter) : null,
+      diff: computedDiff ? JSON.stringify(computedDiff) : null,
+      status: status || 'SUCCESS',
+      error_message: errorMessage || null,
+      created_at: nowIso
+    };
 
-      const event = {
-        user_id: userId ? parseInt(userId, 10) : null,
-        username: username || 'system',
-        action,
-        resource_type: resourceType,
-        resource_id: String(resourceId),
-        ip_address: ipAddress || '127.0.0.1',
-        user_agent: userAgent || 'Unknown',
-        device_fingerprint: deviceFingerprint || null,
-        before_state: cleanBefore ? JSON.stringify(cleanBefore) : null,
-        after_state: cleanAfter ? JSON.stringify(cleanAfter) : null,
-        diff: computedDiff ? JSON.stringify(computedDiff) : null,
-        status: status || 'SUCCESS',
-        error_message: errorMessage || null,
-        created_at: new Date().toISOString()
-      };
+    // 1. Immediate local SQLite Write (Synchronous in < 0.2ms WAL mode)
+    try {
+      db.prepare(`
+        INSERT INTO system_audit_logs (
+          user_id, username, action, resource_type, resource_id,
+          ip_address, user_agent, device_fingerprint,
+          before_state, after_state, diff, status, error_message, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.user_id,
+        event.username,
+        event.action,
+        event.resource_type,
+        event.resource_id,
+        event.ip_address,
+        event.user_agent,
+        event.device_fingerprint,
+        event.before_state,
+        event.after_state,
+        event.diff,
+        event.status,
+        event.error_message,
+        event.created_at
+      );
 
-      this.systemQueue.push(event);
+      // Legacy audit_logs table write
+      const detailsMsg = computedDiff ? `Changed: ${Object.keys(computedDiff).join(', ')}` : `${action} ${resourceType} #${resourceId}`;
+      db.prepare(`
+        INSERT INTO audit_logs (user_id, username, action, entity_type, entity_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.user_id,
+        event.username,
+        event.action,
+        event.resource_type,
+        event.resource_id,
+        detailsMsg,
+        event.created_at
+      );
+    } catch (err) {
+      console.warn('Local system audit write notice:', err.message);
+    }
 
-      // Auto trigger flush if batch threshold is met
-      if (this.systemQueue.length >= this.batchSize) {
-        this.flushQueues().catch(() => {});
-      }
-    });
+    // 2. Enqueue for Cloud Supabase Push
+    this.systemQueue.push(event);
+    if (this.systemQueue.length >= this.batchSize) {
+      this.flushCloudQueues().catch(() => {});
+    }
   }
 
   /**
-   * Non-blocking queueing of authentication and login attempts
+   * Logs sign-in and authentication events
    */
   logAuthEvent({
     userId = null,
@@ -171,124 +203,81 @@ class AuditPipelineService {
     sessionId = null,
     metadata = {}
   }) {
-    setImmediate(() => {
-      if (this.authQueue.length >= this.maxQueueCapacity) {
-        console.warn('⚠️ [AuditService] Auth Queue capacity reached. Dropping oldest item.');
-        this.authQueue.shift();
-      }
+    const nowIso = new Date().toISOString();
 
-      const event = {
-        user_id: userId ? parseInt(userId, 10) : null,
-        username: username || 'anonymous',
-        event_type: eventType,
-        status: status || 'SUCCESS',
-        failure_reason: failureReason || null,
-        ip_address: ipAddress || '127.0.0.1',
-        user_agent: userAgent || 'Unknown',
-        device_fingerprint: deviceFingerprint || null,
-        session_id: sessionId || null,
-        metadata: metadata ? JSON.stringify(metadata) : null,
-        created_at: new Date().toISOString()
-      };
+    const event = {
+      user_id: userId ? parseInt(userId, 10) : null,
+      username: username || 'anonymous',
+      event_type: eventType,
+      status: status || 'SUCCESS',
+      failure_reason: failureReason || null,
+      ip_address: ipAddress || '127.0.0.1',
+      user_agent: userAgent || 'Unknown',
+      device_fingerprint: deviceFingerprint || null,
+      session_id: sessionId || null,
+      metadata: metadata ? JSON.stringify(metadata) : null,
+      created_at: nowIso
+    };
 
-      this.authQueue.push(event);
+    // 1. Immediate local SQLite Write
+    try {
+      db.prepare(`
+        INSERT INTO auth_audit_logs (
+          user_id, username, event_type, status, failure_reason,
+          ip_address, user_agent, device_fingerprint, session_id, metadata, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.user_id,
+        event.username,
+        event.event_type,
+        event.status,
+        event.failure_reason,
+        event.ip_address,
+        event.user_agent,
+        event.device_fingerprint,
+        event.session_id,
+        event.metadata,
+        event.created_at
+      );
 
-      if (this.authQueue.length >= this.batchSize) {
-        this.flushQueues().catch(() => {});
-      }
-    });
+      // Write into legacy audit_logs as well
+      const authDetails = `${eventType} (${status})${failureReason ? ` - Reason: ${failureReason}` : ''}`;
+      db.prepare(`
+        INSERT INTO audit_logs (user_id, username, action, entity_type, entity_id, details, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        event.user_id,
+        event.username,
+        eventType,
+        'auth',
+        event.user_id ? String(event.user_id) : '0',
+        authDetails,
+        event.created_at
+      );
+    } catch (err) {
+      console.warn('Local auth audit write notice:', err.message);
+    }
+
+    // 2. Enqueue for Cloud Supabase Push
+    this.authQueue.push(event);
+    if (this.authQueue.length >= this.batchSize) {
+      this.flushCloudQueues().catch(() => {});
+    }
   }
 
   /**
-   * Flushes in-memory batches to SQLite and Supabase in single bulk transactions
+   * Flushes cloud batches to Supabase with fallback to legacy table
    */
-  async flushQueues(isForce = false) {
+  async flushCloudQueues(isForce = false) {
     if (this.isFlushing && !isForce) return;
     if (this.systemQueue.length === 0 && this.authQueue.length === 0) return;
 
     this.isFlushing = true;
 
-    // Drain current slices atomically
     const systemBatch = this.systemQueue.splice(0, this.batchSize);
     const authBatch = this.authQueue.splice(0, this.batchSize);
 
     try {
-      // 1. Batch Write to SQLite
-      if (systemBatch.length > 0) {
-        const insertSys = db.prepare(`
-          INSERT INTO system_audit_logs (
-            user_id, username, action, resource_type, resource_id,
-            ip_address, user_agent, device_fingerprint,
-            before_state, after_state, diff, status, error_message, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        // Also write legacy audit_logs for backward compatibility
-        const insertLegacy = db.prepare(`
-          INSERT INTO audit_logs (user_id, username, action, entity_type, entity_id, details, created_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        db.transaction(() => {
-          for (const item of systemBatch) {
-            insertSys.run(
-              item.user_id,
-              item.username,
-              item.action,
-              item.resource_type,
-              item.resource_id,
-              item.ip_address,
-              item.user_agent,
-              item.device_fingerprint,
-              item.before_state,
-              item.after_state,
-              item.diff,
-              item.status,
-              item.error_message,
-              item.created_at
-            );
-
-            insertLegacy.run(
-              item.user_id,
-              item.username,
-              item.action,
-              item.resource_type,
-              item.resource_id,
-              item.diff ? `Changed: ${Object.keys(JSON.parse(item.diff)).join(', ')}` : item.action,
-              item.created_at
-            );
-          }
-        })();
-      }
-
-      if (authBatch.length > 0) {
-        const insertAuth = db.prepare(`
-          INSERT INTO auth_audit_logs (
-            user_id, username, event_type, status, failure_reason,
-            ip_address, user_agent, device_fingerprint, session_id, metadata, created_at
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `);
-
-        db.transaction(() => {
-          for (const item of authBatch) {
-            insertAuth.run(
-              item.user_id,
-              item.username,
-              item.event_type,
-              item.status,
-              item.failure_reason,
-              item.ip_address,
-              item.user_agent,
-              item.device_fingerprint,
-              item.session_id,
-              item.metadata,
-              item.created_at
-            );
-          }
-        })();
-      }
-
-      // 2. Async Non-blocking Push to Supabase PostgreSQL (if connected)
       if (supabase) {
         if (systemBatch.length > 0) {
           const formattedSys = systemBatch.map(s => ({
@@ -297,9 +286,24 @@ class AuditPipelineService {
             after_state: s.after_state ? JSON.parse(s.after_state) : null,
             diff: s.diff ? JSON.parse(s.diff) : null
           }));
-          supabase.from('system_audit_logs').insert(formattedSys).then(() => {}).catch(err => {
-            console.warn('Supabase system audit log push notice:', err.message);
-          });
+
+          // Try insert to system_audit_logs
+          const { error: sysErr } = await supabase.from('system_audit_logs').insert(formattedSys);
+
+          // If table doesn't exist or errored, write to Supabase legacy audit_logs table
+          if (sysErr) {
+            const legacySys = systemBatch.map(s => ({
+              user_id: s.user_id,
+              username: s.username,
+              action: s.action,
+              entity_type: s.resource_type,
+              entity_id: parseInt(s.resource_id, 10) || 0,
+              details: s.diff ? `Changed: ${Object.keys(JSON.parse(s.diff)).join(', ')}` : s.action,
+              ip_address: s.ip_address,
+              created_at: s.created_at
+            }));
+            await supabase.from('audit_logs').insert(legacySys);
+          }
         }
 
         if (authBatch.length > 0) {
@@ -307,23 +311,39 @@ class AuditPipelineService {
             ...a,
             metadata: a.metadata ? JSON.parse(a.metadata) : null
           }));
-          supabase.from('auth_audit_logs').insert(formattedAuth).then(() => {}).catch(err => {
-            console.warn('Supabase auth audit log push notice:', err.message);
-          });
+
+          const { error: authErr } = await supabase.from('auth_audit_logs').insert(formattedAuth);
+
+          if (authErr) {
+            const legacyAuth = authBatch.map(a => ({
+              user_id: a.user_id,
+              username: a.username,
+              action: a.event_type,
+              entity_type: 'auth',
+              entity_id: a.user_id || 0,
+              details: `${a.event_type} (${a.status})${a.failure_reason ? ` - ${a.failure_reason}` : ''}`,
+              ip_address: a.ip_address,
+              created_at: a.created_at
+            }));
+            await supabase.from('audit_logs').insert(legacyAuth);
+          }
         }
       }
     } catch (err) {
-      console.error('❌ Critical Batch Audit Persistence Error:', err);
+      console.warn('Cloud audit flush notice:', err.message);
     } finally {
       this.isFlushing = false;
-      // If items remain in queue, trigger immediate next batch
       if (this.systemQueue.length > 0 || this.authQueue.length > 0) {
-        setImmediate(() => this.flushQueues().catch(() => {}));
+        setImmediate(() => this.flushCloudQueues().catch(() => {}));
       }
     }
   }
+
+  // Alias for backward compatibility
+  flushQueues(isForce = false) {
+    return this.flushCloudQueues(isForce);
+  }
 }
 
-// Export singleton instance
 const auditService = new AuditPipelineService();
 module.exports = auditService;

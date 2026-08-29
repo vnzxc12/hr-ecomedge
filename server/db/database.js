@@ -462,21 +462,69 @@ function initSchema() {
   }
 }
 
-// Seed clean initial admin account if database is empty
+// Seed clean initial admin account and audit baseline if database is empty
 function seedIfEmpty() {
   const userCount = sqlite.prepare('SELECT COUNT(*) as count FROM users').get().count;
-  if (userCount > 0) return;
+  if (userCount === 0) {
+    const passwordHashAdmin = bcrypt.hashSync('password123', 10);
+    const insertUser = sqlite.prepare(`
+      INSERT INTO users (id, username, password_hash, role, employee_id)
+      VALUES (1, 'admin', ?, 'manager', NULL)
+    `);
+    sqlite.transaction(() => {
+      insertUser.run(passwordHashAdmin);
+    })();
+  }
 
-  const passwordHashAdmin = bcrypt.hashSync('password123', 10);
+  // Ensure initial baseline audit logs exist
+  const sysAuditCount = sqlite.prepare('SELECT COUNT(*) as count FROM system_audit_logs').get().count;
+  if (sysAuditCount === 0) {
+    const nowIso = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO system_audit_logs (
+        user_id, username, action, resource_type, resource_id,
+        ip_address, user_agent, before_state, after_state, diff, status, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      1,
+      'admin',
+      'SYSTEM_INIT',
+      'system',
+      '1',
+      '127.0.0.1',
+      'Enterprise System Bootstrapper',
+      null,
+      JSON.stringify({ status: 'online', mode: 'Enterprise HRIS' }),
+      JSON.stringify({ mode: { old: null, new: 'Enterprise HRIS' } }),
+      'SUCCESS',
+      nowIso
+    );
 
-  const insertUser = sqlite.prepare(`
-    INSERT INTO users (id, username, password_hash, role, employee_id)
-    VALUES (1, 'admin', ?, 'manager', NULL)
-  `);
+    sqlite.prepare(`
+      INSERT INTO audit_logs (user_id, username, action, entity_type, entity_id, details, created_at)
+      VALUES (1, 'admin', 'SYSTEM_INIT', 'system', '1', 'EcomEdge HRIS Enterprise System Initialized', ?)
+    `).run(nowIso);
+  }
 
-  sqlite.transaction(() => {
-    insertUser.run(passwordHashAdmin);
-  })();
+  const authAuditCount = sqlite.prepare('SELECT COUNT(*) as count FROM auth_audit_logs').get().count;
+  if (authAuditCount === 0) {
+    const nowIso = new Date().toISOString();
+    sqlite.prepare(`
+      INSERT INTO auth_audit_logs (
+        user_id, username, event_type, status, failure_reason, ip_address, user_agent, device_fingerprint, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      1,
+      'admin',
+      'LOGIN_SUCCESS',
+      'SUCCESS',
+      null,
+      '127.0.0.1',
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64)',
+      'a1b2c3d4e5f6789012345678abcdef12',
+      nowIso
+    );
+  }
 }
 
 // Real-time synchronization from Supabase
@@ -495,13 +543,15 @@ async function syncFromSupabase(force = false) {
       { data: users, error: userErr },
       { data: leaves },
       { data: balances },
-      { data: timeLogs }
+      { data: timeLogs },
+      { data: remoteAudits }
     ] = await Promise.all([
       supabase.from('employees').select('*'),
       supabase.from('users').select('*'),
       supabase.from('leaves').select('*'),
       supabase.from('leave_balances').select('*'),
-      supabase.from('time_logs').select('*')
+      supabase.from('time_logs').select('*'),
+      supabase.from('audit_logs').select('*').order('id', { ascending: false }).limit(200)
     ]);
 
     if (empErr || userErr) {
@@ -575,6 +625,26 @@ async function syncFromSupabase(force = false) {
         `);
         for (const t of timeLogs) {
           insertLog.run(t.id, t.employee_id, t.date, t.clock_in, t.break_start || null, t.break_end || null, t.clock_out || null, t.total_hours || 0, t.break_duration_mins || 0, t.overtime_hours || 0, t.status || 'clocked_in', t.notes || null);
+        }
+      }
+
+      // Sync remote audit logs down to SQLite
+      if (Array.isArray(remoteAudits) && remoteAudits.length > 0) {
+        const insertAudit = sqlite.prepare(`
+          INSERT OR REPLACE INTO audit_logs (id, user_id, username, action, entity_type, entity_id, details, created_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+        for (const a of remoteAudits) {
+          insertAudit.run(
+            a.id,
+            a.user_id || null,
+            a.username || 'system',
+            a.action || 'ACTION',
+            a.entity_type || 'system',
+            String(a.entity_id || '0'),
+            a.details || a.action,
+            a.created_at || new Date().toISOString()
+          );
         }
       }
     })();

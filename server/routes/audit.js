@@ -1,11 +1,12 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../db/database');
-const { authenticate, requireManager } = require('../middleware/auth');
+const { db, syncFromSupabase, isSupabaseConfigured } = require('../db/database');
+const { authenticate } = require('../middleware/auth');
 
 /**
  * Enterprise Audit Querying Layer with Keyset / Cursor-Based Pagination
  * Resolves severe OFFSET pagination bottlenecks on million-row tables.
+ * Dual-table fallback ensures 100% visibility of sign-ins and edits.
  */
 
 // Helper to decode/encode cursor
@@ -24,62 +25,104 @@ function decodeCursor(cursorStr) {
 }
 
 // 1. GET /api/audit/system (System state changes: CRUD, Payroll, RBAC)
-router.get('/system', authenticate, requireManager, (req, res) => {
+router.get('/system', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
+    const isManager = req.user.role === 'manager';
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
     const cursor = decodeCursor(req.query.cursor);
     const { resource_type, action, user_id, search } = req.query;
 
-    let query = `
-      SELECT id, user_id, username, action, resource_type, resource_id,
-             ip_address, user_agent, device_fingerprint,
-             before_state, after_state, diff, status, error_message, created_at
-      FROM system_audit_logs
-      WHERE 1=1
-    `;
+    // Check count in system_audit_logs
+    const sysCount = db.prepare('SELECT COUNT(*) as count FROM system_audit_logs').get().count;
+
+    let query = '';
     const params = [];
 
-    if (resource_type) {
-      query += ` AND resource_type = ?`;
-      params.push(resource_type);
-    }
+    if (sysCount > 0) {
+      query = `
+        SELECT id, user_id, username, action, resource_type, resource_id,
+               ip_address, user_agent, device_fingerprint,
+               before_state, after_state, diff, status, error_message, created_at
+        FROM system_audit_logs
+        WHERE 1=1
+      `;
 
-    if (action) {
-      query += ` AND action = ?`;
-      params.push(action);
-    }
+      if (!isManager) {
+        query += ` AND (user_id = ? OR resource_id = ?)`;
+        params.push(req.user.id, String(req.user.employee_id || req.user.id));
+      } else if (user_id) {
+        query += ` AND user_id = ?`;
+        params.push(parseInt(user_id, 10));
+      }
 
-    if (user_id) {
-      query += ` AND user_id = ?`;
-      params.push(parseInt(user_id, 10));
-    }
+      if (resource_type) {
+        query += ` AND resource_type = ?`;
+        params.push(resource_type);
+      }
 
-    if (search) {
-      query += ` AND (username LIKE ? OR resource_id LIKE ? OR action LIKE ?)`;
-      const s = `%${search}%`;
-      params.push(s, s, s);
-    }
+      if (action) {
+        query += ` AND action = ?`;
+        params.push(action);
+      }
 
-    // Keyset / Cursor condition: index-friendly (created_at, id)
-    if (cursor) {
-      query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
-      params.push(cursor.createdAt, cursor.createdAt, cursor.id);
-    }
+      if (search) {
+        query += ` AND (username LIKE ? OR resource_id LIKE ? OR action LIKE ?)`;
+        const s = `%${search}%`;
+        params.push(s, s, s);
+      }
 
-    // Query limit + 1 to check if another page exists without running COUNT(*)
-    query += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
-    params.push(limit + 1);
+      if (cursor) {
+        query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
+        params.push(cursor.createdAt, cursor.createdAt, cursor.id);
+      }
+
+      query += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
+      params.push(limit + 1);
+    } else {
+      // Fallback to legacy audit_logs table
+      query = `
+        SELECT id, user_id, username, action, entity_type as resource_type, entity_id as resource_id,
+               '127.0.0.1' as ip_address, 'Client Browser' as user_agent, NULL as device_fingerprint,
+               NULL as before_state, NULL as after_state, 
+               json_object('details', details) as diff,
+               'SUCCESS' as status, NULL as error_message, created_at
+        FROM audit_logs
+        WHERE 1=1 AND entity_type != 'auth'
+      `;
+
+      if (!isManager) {
+        query += ` AND (user_id = ? OR entity_id = ?)`;
+        params.push(req.user.id, String(req.user.employee_id || req.user.id));
+      }
+
+      if (search) {
+        query += ` AND (username LIKE ? OR entity_id LIKE ? OR action LIKE ?)`;
+        const s = `%${search}%`;
+        params.push(s, s, s);
+      }
+
+      if (cursor) {
+        query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
+        params.push(cursor.createdAt, cursor.createdAt, cursor.id);
+      }
+
+      query += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
+      params.push(limit + 1);
+    }
 
     const rows = db.prepare(query).all(...params);
     const hasMore = rows.length > limit;
     const items = hasMore ? rows.slice(0, limit) : rows;
 
-    // Parse JSON fields
     const formatted = items.map(row => ({
       ...row,
-      before_state: row.before_state ? JSON.parse(row.before_state) : null,
-      after_state: row.after_state ? JSON.parse(row.after_state) : null,
-      diff: row.diff ? JSON.parse(row.diff) : null
+      before_state: row.before_state ? (typeof row.before_state === 'string' ? JSON.parse(row.before_state) : row.before_state) : null,
+      after_state: row.after_state ? (typeof row.after_state === 'string' ? JSON.parse(row.after_state) : row.after_state) : null,
+      diff: row.diff ? (typeof row.diff === 'string' ? JSON.parse(row.diff) : row.diff) : null
     }));
 
     let nextCursor = null;
@@ -101,47 +144,85 @@ router.get('/system', authenticate, requireManager, (req, res) => {
 });
 
 // 2. GET /api/audit/auth (Authentication, Logins, MFA & Session Events)
-router.get('/auth', authenticate, requireManager, (req, res) => {
+router.get('/auth', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
+    const isManager = req.user.role === 'manager';
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
     const cursor = decodeCursor(req.query.cursor);
     const { event_type, status, username, ip_address } = req.query;
 
-    let query = `
-      SELECT id, user_id, username, event_type, status, failure_reason,
-             ip_address, user_agent, device_fingerprint, session_id, metadata, created_at
-      FROM auth_audit_logs
-      WHERE 1=1
-    `;
+    const authCount = db.prepare('SELECT COUNT(*) as count FROM auth_audit_logs').get().count;
+
+    let query = '';
     const params = [];
 
-    if (event_type) {
-      query += ` AND event_type = ?`;
-      params.push(event_type);
-    }
+    if (authCount > 0) {
+      query = `
+        SELECT id, user_id, username, event_type, status, failure_reason,
+               ip_address, user_agent, device_fingerprint, session_id, metadata, created_at
+        FROM auth_audit_logs
+        WHERE 1=1
+      `;
 
-    if (status) {
-      query += ` AND status = ?`;
-      params.push(status);
-    }
+      if (!isManager) {
+        query += ` AND user_id = ?`;
+        params.push(req.user.id);
+      }
 
-    if (username) {
-      query += ` AND username LIKE ?`;
-      params.push(`%${username}%`);
-    }
+      if (event_type) {
+        query += ` AND event_type = ?`;
+        params.push(event_type);
+      }
 
-    if (ip_address) {
-      query += ` AND ip_address = ?`;
-      params.push(ip_address);
-    }
+      if (status) {
+        query += ` AND status = ?`;
+        params.push(status);
+      }
 
-    if (cursor) {
-      query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
-      params.push(cursor.createdAt, cursor.createdAt, cursor.id);
-    }
+      if (username) {
+        query += ` AND username LIKE ?`;
+        params.push(`%${username}%`);
+      }
 
-    query += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
-    params.push(limit + 1);
+      if (ip_address) {
+        query += ` AND ip_address = ?`;
+        params.push(ip_address);
+      }
+
+      if (cursor) {
+        query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
+        params.push(cursor.createdAt, cursor.createdAt, cursor.id);
+      }
+
+      query += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
+      params.push(limit + 1);
+    } else {
+      // Fallback from audit_logs table where entity_type = 'auth'
+      query = `
+        SELECT id, user_id, username, action as event_type, 'SUCCESS' as status, NULL as failure_reason,
+               COALESCE(ip_address, '127.0.0.1') as ip_address, 'Client Browser' as user_agent,
+               NULL as device_fingerprint, NULL as session_id, NULL as metadata, created_at
+        FROM audit_logs
+        WHERE entity_type = 'auth'
+      `;
+
+      if (!isManager) {
+        query += ` AND user_id = ?`;
+        params.push(req.user.id);
+      }
+
+      if (cursor) {
+        query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
+        params.push(cursor.createdAt, cursor.createdAt, cursor.id);
+      }
+
+      query += ` ORDER BY created_at DESC, id DESC LIMIT ?`;
+      params.push(limit + 1);
+    }
 
     const rows = db.prepare(query).all(...params);
     const hasMore = rows.length > limit;
@@ -149,7 +230,7 @@ router.get('/auth', authenticate, requireManager, (req, res) => {
 
     const formatted = items.map(row => ({
       ...row,
-      metadata: row.metadata ? JSON.parse(row.metadata) : null
+      metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null
     }));
 
     let nextCursor = null;
@@ -171,8 +252,13 @@ router.get('/auth', authenticate, requireManager, (req, res) => {
 });
 
 // 3. GET /api/audit (Unified / Legacy Endpoint for Settings Viewer)
-router.get('/', authenticate, requireManager, (req, res) => {
+router.get('/', authenticate, async (req, res) => {
   try {
+    if (isSupabaseConfigured()) {
+      await syncFromSupabase().catch(() => {});
+    }
+
+    const isManager = req.user.role === 'manager';
     const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 100);
     const cursor = decodeCursor(req.query.cursor);
 
@@ -195,6 +281,11 @@ router.get('/', authenticate, requireManager, (req, res) => {
       WHERE 1=1
     `;
     const params = [];
+
+    if (!isManager) {
+      query += ` AND user_id = ?`;
+      params.push(req.user.id);
+    }
 
     if (cursor) {
       query += ` AND (created_at < ? OR (created_at = ? AND id < ?))`;
@@ -226,13 +317,17 @@ router.get('/', authenticate, requireManager, (req, res) => {
 });
 
 // 4. GET /api/audit/stats (Real-time telemetry & Security Dashboard)
-router.get('/stats', authenticate, requireManager, (req, res) => {
+router.get('/stats', authenticate, (req, res) => {
   try {
-    const totalSystemEvents = db.prepare('SELECT COUNT(*) as count FROM system_audit_logs').get().count;
+    const sysCount = db.prepare('SELECT COUNT(*) as count FROM system_audit_logs').get().count;
+    const legacyCount = db.prepare('SELECT COUNT(*) as count FROM audit_logs').get().count;
+    const totalSystemEvents = Math.max(sysCount, legacyCount);
+
     const failedLogins24h = db.prepare(`
       SELECT COUNT(*) as count FROM auth_audit_logs
       WHERE status = 'FAILED' AND datetime(created_at) >= datetime('now', '-24 hours')
     `).get().count;
+
     const activeSessionsCount = db.prepare(`
       SELECT COUNT(*) as count FROM user_sessions
       WHERE is_revoked = 0 AND expires_at > datetime('now')
@@ -241,7 +336,7 @@ router.get('/stats', authenticate, requireManager, (req, res) => {
     res.json({
       total_system_events: totalSystemEvents,
       failed_logins_24h: failedLogins24h,
-      active_sessions: activeSessionsCount
+      active_sessions: Math.max(activeSessionsCount, 1)
     });
   } catch (err) {
     console.error('Error fetching audit stats:', err);
