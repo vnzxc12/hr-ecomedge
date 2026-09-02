@@ -565,7 +565,7 @@ export default function Payroll() {
                   />
                 </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div className="form-row">
                   <div className="form-group">
                     <label className="form-label" style={{ fontWeight: 700 }}>Benchmark Monthly Hours</label>
                     <input
@@ -794,7 +794,7 @@ export default function Payroll() {
                 <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--primary)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   1. Gross Earnings (₱)
                 </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div className="form-row" style={{ gap: '0.75rem', marginBottom: '1.25rem' }}>
                   <div className="form-group">
                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Basic Pay (₱)</label>
                     <input
@@ -837,7 +837,7 @@ export default function Payroll() {
                 <h4 style={{ fontSize: '0.88rem', fontWeight: 800, color: 'var(--danger)', marginBottom: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                   2. Itemized Deductions &amp; Taxes (₱)
                 </h4>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div className="form-row" style={{ gap: '0.75rem', marginBottom: '1.25rem' }}>
                   <div className="form-group">
                     <label className="form-label" style={{ fontSize: '0.75rem' }}>Withholding Tax (₱)</label>
                     <input
@@ -879,7 +879,7 @@ export default function Payroll() {
                 </div>
 
                 {/* Live Computed Summary Banner */}
-                <div style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '0.85rem 1.25rem', border: '1px solid var(--border-color)', display: 'grid', gridTemplateColumns: '1fr 1fr 1.2fr', gap: '1rem', alignItems: 'center' }}>
+                <div className="grid-responsive-3" style={{ background: 'var(--bg-secondary)', borderRadius: 'var(--radius-md)', padding: '0.85rem 1.25rem', border: '1px solid var(--border-color)', gap: '1rem', alignItems: 'center' }}>
                   <div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Gross Earnings</div>
                     <div style={{ fontWeight: 800, fontSize: '0.95rem' }}>₱{computedGross.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>

@@ -479,7 +479,7 @@ export default function Employees() {
 
         {/* TAB 1: OVERVIEW */}
         {profileTab === 'overview' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid-responsive-cards">
             <div className="glass-card">
               <h3 style={{ fontSize: '1.05rem', fontWeight: 800, marginBottom: '1rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
                 Personal &amp; Contact Details
@@ -684,7 +684,7 @@ export default function Employees() {
 
         {/* TAB 6: PROJECTS */}
         {profileTab === 'projects' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid-responsive-cards">
             {prjs.length === 0 ? (
               <div className="glass-card" style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
                 No active project assignments.
@@ -1184,7 +1184,7 @@ export default function Employees() {
 
         <select
           className="form-control"
-          style={{ width: 'auto', minWidth: '180px' }}
+          style={{ flex: '1 1 160px' }}
           value={teamFilter}
           onChange={(e) => setTeamFilter(e.target.value)}
         >
@@ -1194,7 +1194,7 @@ export default function Employees() {
 
         <select
           className="form-control"
-          style={{ width: 'auto', minWidth: '180px' }}
+          style={{ flex: '1 1 160px' }}
           value={deptFilter}
           onChange={(e) => setDeptFilter(e.target.value)}
         >
@@ -1207,7 +1207,7 @@ export default function Employees() {
 
         <select
           className="form-control"
-          style={{ width: 'auto', minWidth: '140px' }}
+          style={{ flex: '1 1 140px' }}
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
         >

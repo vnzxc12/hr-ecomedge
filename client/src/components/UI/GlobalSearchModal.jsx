@@ -81,8 +81,12 @@ export default function GlobalSearchModal({ isOpen, onClose, onNavigate }) {
             onChange={(e) => setQuery(e.target.value)}
             autoFocus
           />
-          {query && (
-            <button className="btn-icon" onClick={() => setQuery('')} style={{ width: '28px', height: '28px' }}>
+          {query ? (
+            <button className="btn-icon" onClick={() => setQuery('')} style={{ width: '28px', height: '28px' }} title="Clear search">
+              <X size={16} />
+            </button>
+          ) : (
+            <button className="btn-icon mobile-search-close" onClick={onClose} style={{ width: '28px', height: '28px' }} title="Close search">
               <X size={16} />
             </button>
           )}

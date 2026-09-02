@@ -171,7 +171,7 @@ export default function Training() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
         <button
           className={`btn ${activeTab === 'programs' ? 'btn-primary' : 'btn-secondary'}`}
           onClick={() => setActiveTab('programs')}
@@ -192,7 +192,7 @@ export default function Training() {
           PROGRAMS CATALOG
           ========================================== */}
       {activeTab === 'programs' && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
+        <div className="grid-responsive-cards">
           {loading ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
               Loading programs...

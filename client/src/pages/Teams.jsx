@@ -224,7 +224,7 @@ export default function Teams() {
             <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Hydrating Teams &amp; Squad Rosters...</div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Synchronizing departmental records from EcomEdge Cloud</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid-responsive-cards">
             {[1, 2, 3].map(i => (
               <div key={i} className="skeleton-pulse" style={{ height: '190px', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div style={{ height: '20px', width: '40%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
@@ -269,7 +269,7 @@ export default function Teams() {
           </div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+        <div className="grid-responsive-cards">
           {filteredTeams.map((team) => (
             <div key={team.id} className="glass-card team-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
               <div>

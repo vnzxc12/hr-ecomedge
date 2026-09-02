@@ -39,48 +39,22 @@ export default function Login() {
   };
 
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #f8fafc 0%, #edf2f7 100%)',
-      padding: '1.5rem',
-      position: 'relative'
-    }}>
-      <div style={{
-        width: '100%',
-        maxWidth: '1000px',
-        display: 'grid',
-        gridTemplateColumns: '1.1fr 1fr',
-        background: '#ffffff',
-        border: '1px solid #e2e8f0',
-        borderRadius: 'var(--radius-lg)',
-        boxShadow: 'var(--shadow-lg)',
-        overflow: 'hidden',
-        zIndex: 10
-      }}>
+    <div className="login-page-wrapper">
+      <div className="login-card">
         {/* Left Side: Brand & Feature Showcase */}
-        <div style={{
-          background: 'linear-gradient(160deg, #ffffff 0%, #f0fdf4 100%)',
-          padding: '3rem 2.5rem',
-          borderRight: '1px solid #e2e8f0',
-          display: 'flex',
-          flexDirection: 'column',
-          justifyContent: 'space-between'
-        }}>
+        <div className="login-brand-panel">
           <div>
-            <div style={{ marginBottom: '1.75rem' }}>
-              <EcomEdgeLogo size={46} />
+            <div style={{ marginBottom: '1.5rem' }}>
+              <EcomEdgeLogo size={42} />
             </div>
 
             {/* Headline */}
-            <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ marginBottom: '1.25rem' }}>
               <div style={{
                 fontFamily: 'var(--font-heading)',
-                fontSize: '2.3rem',
+                fontSize: 'clamp(1.6rem, 3.5vw, 2.2rem)',
                 fontWeight: '900',
-                lineHeight: '1.05',
+                lineHeight: '1.1',
                 color: 'var(--brand-navy)',
                 letterSpacing: '-0.02em'
               }}>
@@ -104,18 +78,18 @@ export default function Login() {
               </div>
             </div>
 
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', lineHeight: '1.6', marginBottom: '1.75rem' }}>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', lineHeight: '1.55', marginBottom: '1.5rem' }}>
               Enterprise workforce operations suite for attendance time logs, automated payroll computation, secure employee records, and self-service.
             </p>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
                 <div style={{ background: 'var(--brand-green-light)', padding: '7px', borderRadius: '8px', color: 'var(--brand-green)' }}>
                   <Clock size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Shift Tracker & Punch Clock</h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Live Time In, Lunch Breaks, Overtime, and Night Shift tracking.</p>
+                  <h4 style={{ fontSize: '0.88rem', color: 'var(--brand-navy)' }}>Shift Tracker & Punch Clock</h4>
+                  <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>Live Time In, Lunch Breaks, Overtime, and Night Shift tracking.</p>
                 </div>
               </div>
 
@@ -124,8 +98,8 @@ export default function Login() {
                   <Banknote size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Automated Payroll & Payslips (₱)</h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Instant earnings calculator and official printable itemized slips.</p>
+                  <h4 style={{ fontSize: '0.88rem', color: 'var(--brand-navy)' }}>Automated Payroll & Payslips (₱)</h4>
+                  <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>Instant earnings calculator and official printable itemized slips.</p>
                 </div>
               </div>
 
@@ -134,14 +108,14 @@ export default function Login() {
                   <FolderLock size={18} />
                 </div>
                 <div>
-                  <h4 style={{ fontSize: '0.9rem', color: 'var(--brand-navy)' }}>Vault for CV & Government IDs</h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>Self-service upload for resumes, passports, and signed contracts.</p>
+                  <h4 style={{ fontSize: '0.88rem', color: 'var(--brand-navy)' }}>Vault for CV & Government IDs</h4>
+                  <p style={{ fontSize: '0.76rem', color: 'var(--text-secondary)' }}>Self-service upload for resumes, passports, and signed contracts.</p>
                 </div>
               </div>
             </div>
           </div>
 
-          <div style={{ marginTop: '2rem', paddingTop: '1.25rem', borderTop: '1px solid #e2e8f0' }}>
+          <div style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid var(--border-color)' }}>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -150,7 +124,7 @@ export default function Login() {
               color: '#ffffff',
               padding: '6px 14px',
               borderRadius: 'var(--radius-full)',
-              fontSize: '0.78rem',
+              fontSize: '0.75rem',
               fontWeight: '700'
             }}>
               <Moon size={14} color="#00d65b" />
@@ -160,8 +134,8 @@ export default function Login() {
         </div>
 
         {/* Right Side: Login Form */}
-        <div style={{ padding: '3.5rem 2.75rem', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-          <div style={{ marginBottom: '2rem' }}>
+        <div className="login-form-panel">
+          <div style={{ marginBottom: '1.75rem' }}>
             <h2 style={{ fontSize: '1.65rem', color: 'var(--brand-navy)', marginBottom: '0.35rem' }}>Account Sign In</h2>
             <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
               Enter your assigned username and password to log in.

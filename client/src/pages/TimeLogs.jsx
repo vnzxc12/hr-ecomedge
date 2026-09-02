@@ -207,7 +207,7 @@ export default function TimeLogs() {
 
       {/* Tabs */}
       {isManager && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem' }}>
+        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.5rem', flexWrap: 'wrap' }}>
           <button
             className={`btn ${activeTab === 'live' ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setActiveTab('live')}

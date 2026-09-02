@@ -378,7 +378,7 @@ export default function Projects() {
             <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>Hydrating Client Projects &amp; Workload Data...</div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Synchronizing enterprise client records from EcomEdge Cloud</div>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid-responsive-cards">
             {[1, 2, 3].map(i => (
               <div key={i} className="skeleton-pulse" style={{ height: '210px', padding: '1.5rem', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div style={{ height: '22px', width: '35%', background: 'rgba(255,255,255,0.08)', borderRadius: '4px' }} />
@@ -420,7 +420,7 @@ export default function Projects() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid-responsive-cards">
             {projects.map(prj => {
               const members = prj.assigned_members || [];
               return (
@@ -676,7 +676,7 @@ export default function Projects() {
             </div>
           </div>
         ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+          <div className="grid-responsive-cards">
             {clients.map(client => (
               <div key={client.id} className="glass-card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
                 <div>

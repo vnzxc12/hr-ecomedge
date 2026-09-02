@@ -100,7 +100,7 @@ export default function Reports() {
       </div>
 
       {/* Detailed Reports Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+      <div className="grid-responsive-cards">
         {/* Team Headcount Distribution */}
         <div className="glass-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>

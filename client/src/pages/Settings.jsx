@@ -267,7 +267,7 @@ export default function Settings() {
       {loading ? (
         <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading records...</div>
       ) : activeTab === 'payroll_config' ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(320px, 1.2fr) minmax(280px, 0.8fr)', gap: '1.5rem', alignItems: 'start' }}>
+        <div className="grid-responsive-2-unequal" style={{ alignItems: 'start' }}>
           {/* Settings Form */}
           <div className="glass-card">
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -331,7 +331,7 @@ export default function Settings() {
                 <small style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Fixed non-taxable monthly travel &amp; meal stipend (prorated by attendance hours).</small>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+              <div className="form-row" style={{ marginBottom: '1.5rem' }}>
                 <div className="form-group">
                   <label className="form-label" style={{ fontWeight: 700 }}>Monthly Benchmark Hours</label>
                   <input
@@ -664,7 +664,7 @@ export default function Settings() {
                 </div>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+              <div className="grid-responsive-2" style={{ gap: '1rem' }}>
                 <div>
                   <h4 style={{ fontSize: '0.88rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Before State:</h4>
                   <pre style={{ background: 'rgba(0,0,0,0.2)', padding: '0.75rem', borderRadius: '8px', fontSize: '0.75rem', overflowX: 'auto', maxHeight: '200px' }}>

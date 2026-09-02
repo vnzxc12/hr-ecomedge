@@ -89,7 +89,7 @@ export default function Performance() {
           No performance reviews recorded yet.
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '1.25rem' }}>
+        <div className="grid-responsive-cards">
           {reviews.map(rev => (
             <div key={rev.id} className="glass-card review-card">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>

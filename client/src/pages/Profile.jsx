@@ -149,7 +149,7 @@ export default function Profile() {
         </p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '2rem' }}>
+      <div className="grid-responsive-2-unequal">
         {/* Left Column: Personal Profile Form */}
         <div className="glass-card">
           {/* User Profile Picture & Header */}

@@ -225,7 +225,7 @@ export default function Dashboard({ onNavigate }) {
         </div>
 
         {/* Mid-Section: Workforce Distribution & Active Client Projects */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+        <div className="grid-responsive-2" style={{ marginBottom: '1.5rem' }}>
           {/* Workforce Overview by Team */}
           <div className="glass-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.15rem' }}>
@@ -318,7 +318,7 @@ export default function Dashboard({ onNavigate }) {
         </div>
 
         {/* Lower Section: Live Floor Attendance & Urgent Approvals */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr', gap: '1.5rem' }}>
+        <div className="grid-responsive-2-unequal">
           {/* Live Floor Activity */}
           <div className="glass-card" style={{ padding: 0, overflow: 'hidden' }}>
             <div style={{ padding: '0.85rem 1.25rem', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -498,7 +498,7 @@ export default function Dashboard({ onNavigate }) {
         boxShadow: 'var(--shadow-md)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '1.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', flexWrap: 'wrap' }}>
             {/* Circular Profile Picture with Active Ring */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div className="user-avatar" style={{ 
@@ -541,7 +541,7 @@ export default function Dashboard({ onNavigate }) {
           </div>
 
           {/* Quick Action Buttons */}
-          <div style={{ display: 'flex', gap: '0.65rem', flexWrap: 'wrap' }}>
+          <div className="quick-actions-toolbar">
             <button className="btn btn-primary btn-sm" onClick={() => setShowPunchModal(true)}>
               <Clock size={15} /> Punch Clock
             </button>
@@ -602,7 +602,7 @@ export default function Dashboard({ onNavigate }) {
       </div>
 
       {/* Employee Middle Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginTop: '1.5rem' }}>
+      <div className="grid-responsive-2" style={{ marginTop: '1.5rem' }}>
         {/* Assigned Projects */}
         <div className="glass-card">
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>

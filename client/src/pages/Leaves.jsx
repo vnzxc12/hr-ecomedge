@@ -199,7 +199,7 @@ export default function Leaves() {
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           {isManager && (
             <button className="btn btn-secondary" onClick={() => setShowQuotaModal(true)}>
               <Sliders size={18} />
@@ -255,8 +255,8 @@ export default function Leaves() {
       {/* Filter Bar */}
       {isManager && (
         <div className="glass-card" style={{ marginBottom: '1.5rem', padding: '1rem 1.25rem' }}>
-          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-            <div style={{ width: '220px' }}>
+          <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+            <div style={{ flex: '1 1 200px', maxWidth: '300px' }}>
               <select
                 className="form-control"
                 value={statusFilter}

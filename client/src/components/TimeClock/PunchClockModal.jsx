@@ -248,7 +248,7 @@ export default function PunchClockModal({ isOpen, onClose }) {
               <h4 style={{ fontSize: '0.82rem', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: '0.65rem' }}>
                 Today's Recorded Punches
               </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.5rem', textAlign: 'center' }}>
+              <div className="punch-record-grid">
                 <div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Clock In</div>
                   <div style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--success)' }}>
